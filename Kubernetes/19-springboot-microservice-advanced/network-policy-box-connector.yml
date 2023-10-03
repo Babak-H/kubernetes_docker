@@ -1,0 +1,19 @@
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: box-access
+  namespace: mddz
+spec:
+  podSelector:
+    matchLabels:
+      app: box-connector
+# only file-handler can connect to box-connector and only on port 8091, others can be added if it is needed
+  ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            app: file-handler
+      ports:
+        - protocol: TCP
+          port: 8091
+

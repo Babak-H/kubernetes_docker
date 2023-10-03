@@ -1,0 +1,241 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-registry-1
+  namespace: mddz
+spec:
+  selector:
+    matchLabels:
+      app: service-registry-1
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      labels:
+        app: service-registry-1
+    spec:
+      volumes:
+        - name: peer1-logs
+          persistentVolumeClaim:
+            claimName: peer1-logs-claim
+      securityContext:
+        runAsUser: 10000
+        runAsGroup: 10001
+      imagePullSecrets:
+        - name: my-reg-key
+      containers:
+      - name: service-registry-image
+        image: registry.code.***.com/mddz/service-registry:1.0.0-SNAPSHOT
+        securityContext:
+          allowPrivilegeEscalation: false 
+        ports:
+        - containerPort: 8761
+        imagePullPolicy: Always
+        env:
+        - name: INSTANCE
+          value: peer1
+
+        - name: SPRING_PROFILES_ACTIVE
+          value: "remote,dev,peer1"
+
+        - name: mddz_EUREKA_PEER1_HOST
+          value: service-registry-service-1
+
+        - name: mddz_EUREKA_PEER2_HOST
+          value: service-registry-service-2
+
+        - name: mddz_EUREKA_PEER3_HOST
+          value: service-registry-service-3
+
+        - name: ENCRYPT_KEY
+          valueFrom:
+           secretKeyRef:
+            name: encrypt-key-secret
+            key: encrypt-key
+            optional: false
+
+        resources:
+          requests:
+            cpu: 80m
+            memory: 200Mi
+          limits:
+            cpu: 200m
+            memory: 300Mi  
+        volumeMounts:
+          - name: peer1-logs
+            mountPath: /home/mddz/logs/service-registry/${INSTANCE}        
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-registry-2
+  namespace: mddz
+spec:
+  selector:
+    matchLabels:
+      app: service-registry-2
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      labels:
+        app: service-registry-2
+    spec:
+      volumes:
+        - name: peer2-logs
+          persistentVolumeClaim:
+            claimName: peer2-logs-claim
+      securityContext:
+        runAsUser: 10000
+        runAsGroup: 10001
+      imagePullSecrets:
+        - name: my-reg-key
+      containers:
+      - name: service-registry-image
+        image: registry.code.***.com/mddz/service-registry:1.0.0-SNAPSHOT
+        ports:
+        - containerPort: 8762
+        imagePullPolicy: Always
+        env:
+        - name: INSTANCE
+          value: peer2
+
+        - name: SPRING_PROFILES_ACTIVE
+          value: "remote,dev,peer2"
+
+        - name: mddz_EUREKA_PEER1_HOST
+          value: service-registry-service-1
+
+        - name: mddz_EUREKA_PEER2_HOST
+          value: service-registry-service-2
+
+        - name: mddz_EUREKA_PEER3_HOST
+          value: service-registry-service-3
+
+        - name: ENCRYPT_KEY
+          valueFrom:
+           secretKeyRef:
+            name: encrypt-key-secret
+            key: encrypt-key
+            optional: false
+
+        resources:
+          requests:
+            cpu: 80m
+            memory: 200Mi
+          limits:
+            cpu: 200m
+            memory: 300Mi
+        volumeMounts:
+          - name: peer2-logs
+            mountPath: /home/mddz/logs/service-registry/${INSTANCE}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-registry-3
+  namespace: mddz
+spec:
+  selector:
+    matchLabels:
+      app: service-registry-3
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      labels:
+        app: service-registry-3
+    spec:
+      volumes:
+        - name: peer3-logs
+          persistentVolumeClaim:
+            claimName: peer3-logs-claim
+      securityContext:
+        runAsUser: 10000
+        runAsGroup: 10001
+      imagePullSecrets:
+        - name: my-reg-key
+      containers:
+      - name: service-registry-image
+        image: registry.code.***.com/mddz/service-registry:1.0.0-SNAPSHOT
+        ports:
+        - containerPort: 8763
+        imagePullPolicy: Always
+        env:
+        - name: INSTANCE
+          value: peer3
+
+        - name: SPRING_PROFILES_ACTIVE
+          value: "remote,dev,peer3"
+
+        - name: mddz_EUREKA_PEER1_HOST
+          value: service-registry-service-1
+
+        - name: mddz_EUREKA_PEER2_HOST
+          value: service-registry-service-2
+
+        - name: mddz_EUREKA_PEER3_HOST
+          value: service-registry-service-3
+
+        - name: ENCRYPT_KEY
+          valueFrom:
+           secretKeyRef:
+            name: encrypt-key-secret
+            key: encrypt-key
+            optional: false
+
+        resources:
+          requests:
+            cpu: 80m
+            memory: 200Mi
+          limits:
+            cpu: 200m
+            memory: 300Mi
+        volumeMounts:
+          - name: peer3-logs
+            mountPath: /home/mddz/logs/service-registry/${INSTANCE}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-registry-service-1
+  namespace: mddz
+spec:
+  type: ClusterIP
+  selector:
+    app: service-registry-1
+  ports:
+  - protocol: TCP
+    port: 8761
+    targetPort: 8761
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-registry-service-2
+  namespace: mddz
+spec:
+  type: ClusterIP
+  selector:
+    app: service-registry-2
+  ports:
+  - protocol: TCP
+    port: 8762
+    targetPort: 8762
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-registry-service-3
+  namespace: mddz
+spec:
+  type: ClusterIP
+  selector:
+    app: service-registry-3
+  ports:
+  - protocol: TCP
+    port: 8763
+    targetPort: 8763

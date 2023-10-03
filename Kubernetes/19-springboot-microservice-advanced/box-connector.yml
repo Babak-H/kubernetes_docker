@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: box-connector
+  namespace: mddz
+spec:
+  selector:
+    matchLabels:
+      app: box-connector
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/proxyCPU: 80m
+        sidecar.istio.io/proxyCPULimit: 100m
+        sidecar.istio.io/proxyMemory: 150Mi
+        sidecar.istio.io/proxyMemoryLimit: 300Mi 
+      labels:
+        app: box-connector
+    spec:
+      volumes:
+        - name: box-connector-logs
+          persistentVolumeClaim:
+            claimName: box-connector-logs-claim
+      securityContext:
+        runAsUser: 10000
+        runAsGroup: 10001
+      imagePullSecrets:
+        - name: my-reg-key
+      containers:
+      - name: box-connector
+        image: registry.****.***.com/mddz/box-connector:1.0.0-SNAPSHOT
+        securityContext:
+          allowPrivilegeEscalation: false
+        ports:
+        - containerPort: 8091
+        imagePullPolicy: Always
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "dev"
+
+        - name: mddz_EUREKA_PEER1_HOST
+          value: service-registry-service-1
+
+        - name: mddz_EUREKA_PEER2_HOST
+          value: service-registry-service-2
+
+        - name: mddz_EUREKA_PEER3_HOST
+          value: service-registry-service-3
+
+        - name: mddz_EUREKA_PORT
+          value: "8761"
+
+        - name: mddz_EUREKA_USER_NAME
+          value: "****"
+          
+        - name: mddz_EUREKA_USER_PASSWORD
+          valueFrom:
+           secretKeyRef:
+            name: eureka-pass-secret
+            key: eureka-pass
+            optional: false
+
+        resources:
+          requests:
+            cpu: 80m
+            memory: 150Mi
+          limits:
+            cpu: 160m
+            memory: 300Mi
+        args:
+          - /bin/bash
+          - -c
+          - echo "Setting the container to sleep for 5 minutes"; sleep 300;
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: box-connector-service
+  namespace: mddz
+spec:
+  type: ClusterIP
+  selector:
+    app: box-connector
+  ports:
+  - protocol: TCP
+    port: 8091
+    targetPort: 8091

@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: filebeat
+  namespace: mddz
+spec:
+  selector:
+    matchLabels:
+      app: filebeat
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      labels:
+        app: filebeat
+        
+    spec:
+      volumes:
+        - name: filebeat-yml
+          configMap:
+            name: filebeat-yml
+        - name: peer1-logs
+          persistentVolumeClaim:
+            claimName: peer1-logs-claim
+        - name: peer2-logs
+          persistentVolumeClaim:
+            claimName: peer2-logs-claim
+        - name: peer3-logs
+          persistentVolumeClaim:
+            claimName: peer3-logs-claim
+        - name: config-server-logs
+          persistentVolumeClaim:
+            claimName: config-server-logs-claim
+        - name: email-sender-logs
+          persistentVolumeClaim:
+            claimName: email-sender-logs-claim
+        - name: report-uploader-logs
+          persistentVolumeClaim:
+            claimName: report-uploader-logs-claim
+        - name: configuration-fetcher-logs
+          persistentVolumeClaim:
+            claimName: configuration-fetcher-logs-claim
+        - name: file-handler-logs
+          persistentVolumeClaim:
+            claimName: file-handler-logs-claim
+        - name: box-connector-logs
+          persistentVolumeClaim:
+            claimName: box-connector-logs-claim
+        - name: notification-fetcher-logs
+          persistentVolumeClaim:
+            claimName: notification-fetcher-logs-claim
+      containers:
+      - name: filebeat
+        image: docker.elastic.co/beats/filebeat-oss:8.4.3
+        volumeMounts:
+          - name: filebeat-yml
+            mountPath: /usr/share/filebeat/filebeat.yml
+          - name: peer1-logs
+            mountPath: /usr/share/filebeat/logs/service-registry/peer1
+          - name: peer2-logs
+            mountPath: /usr/share/filebeat/logs/service-registry/peer2
+          - name: peer3-logs
+            mountPath: /usr/share/filebeat/logs/service-registry/peer3
+          - name: config-server-logs
+            mountPath: /usr/share/filebeat/logs/config-server
+          - name: email-sender-logs
+            mountPath: /usr/share/filebeat/logs/email-sender
+          - name: report-uploader-logs
+            mountPath: /usr/share/filebeat/logs/report-uploader
+          - name: configuration-fetcher-logs
+            mountPath: /usr/share/filebeat/logs/configuration-fetcher
+          - name: file-handler-logs
+            mountPath: /usr/share/filebeat/logs/file-handler
+          - name: box-connector-logs
+            mountPath: /usr/share/filebeat/logs/box-connector
+          - name: notification-fetcher-logs
+            mountPath: /usr/share/filebeat/logs/notification-fetcher
+        ports:
+        - containerPort: 8888
+        imagePullPolicy: IfNotPresent
+        args: ["-e", "--strict.perms=false"]
+
+        resources:
+          requests:
+            cpu: 80m
+            memory: 100Mi
+          limits:
+            cpu: 150m
+            memory: 200Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: filebeat-service
+  namespace: mddz
+spec:
+  type: ClusterIP
+  selector:
+    app: filebeat
+  ports:
+  - protocol: TCP
+    port: 8888
+    targetPort: 8888

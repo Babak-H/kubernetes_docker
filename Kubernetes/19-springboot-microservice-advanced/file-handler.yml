@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: file-handler
+  namespace: mddz
+spec:
+  selector:
+    matchLabels:
+      app: file-handler
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      labels:
+        app: file-handler
+    spec:
+      volumes:
+        - name: file-handler-logs
+          persistentVolumeClaim:
+            claimName: file-handler-logs-claim
+      securityContext:
+        runAsUser: 10000
+        runAsGroup: 10001
+      imagePullSecrets:
+        - name: my-reg-key
+      containers:
+      - name: file-handler
+        image: registry.***.****.com/mddz/file-handler:1.0.0-SNAPSHOT
+        securityContext:
+          allowPrivilegeEscalation: false
+        ports:
+        - containerPort: 8083
+        imagePullPolicy: Always
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "remote,dev"
+
+        - name: mddz_EUREKA_PEER1_HOST
+          value: service-registry-service-1
+
+        - name: mddz_EUREKA_PEER2_HOST
+          value: service-registry-service-2
+
+        - name: mddz_EUREKA_PEER3_HOST
+          value: service-registry-service-3
+
+        - name: mddz_EUREKA_PORT
+          value: "8761"
+
+        - name: mddz_EUREKA_USER_NAME
+          value: "****"
+
+        - name: MSDDR_EUREKA_USER_PASSWORD
+          valueFrom:
+           secretKeyRef:
+            name: eureka-pass-secret
+            key: eureka-pass
+            optional: false
+
+        resources:
+          requests:
+            cpu: 80m
+            memory: 256Mi
+          limits:
+            cpu: 200m
+            memory: 512Mi
+        volumeMounts:
+          - name: file-handler-logs
+            mountPath: /home/msddr/logs/file-handler/${INSTANCE}   
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: file-handler-service
+  namespace: mddz
+spec:
+  type: ClusterIP
+  selector:
+    app: file-handler
+  ports:
+  - protocol: TCP
+    port: 8083
+    targetPort: 8083

@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-fetcher
+  namespace: mddz
+spec:
+  selector:
+    matchLabels:
+      app: notification-fetcher
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      labels:
+        app: notification-fetcher
+    spec:
+      volumes:
+        - name: notification-fetcher-logs
+          persistentVolumeClaim:
+            claimName: notification-fetcher-logs-claim
+      securityContext:
+        runAsUser: 10000
+        runAsGroup: 10001
+      imagePullSecrets:
+        - name: my-reg-key
+      containers:
+      - name: notification-fetcher
+        image: registry.code.***.com/mddz/notification-fetcher:1.0.0-SNAPSHOT
+        securityContext:
+          allowPrivilegeEscalation: false
+        ports:
+        - containerPort: 8082
+        imagePullPolicy: Always
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "remote,dev"
+
+        - name: mddz_EUREKA_PEER1_HOST
+          value: service-registry-service-1
+
+        - name: mddz_EUREKA_PEER2_HOST
+          value: service-registry-service-2
+
+        - name: mddz_EUREKA_PEER3_HOST
+          value: service-registry-service-3
+
+        - name: mddz_EUREKA_PORT
+          value: "8761"
+
+        - name: mddz_EUREKA_USER_NAME
+          value: "*****"
+
+        - name: mddz_EUREKA_USER_PASSWORD
+          valueFrom:
+           secretKeyRef:
+            name: eureka-pass-secret
+            key: eureka-pass
+            optional: false
+
+        resources:
+          requests:
+            cpu: 80m
+            memory: 150Mi
+          limits:
+            cpu: 160m
+            memory: 300Mi
+        volumeMounts:
+          - name: notification-fetcher-logs
+            mountPath: /home/mddz/logs/notification-fetcher/${INSTANCE}          
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-fetcher-service
+  namespace: mddz
+spec:
+  type: ClusterIP
+  selector:
+    app: notification-fetcher
+  ports:
+  - protocol: TCP
+    port: 8082
+    targetPort: 8082

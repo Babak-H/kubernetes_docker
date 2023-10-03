@@ -1,0 +1,138 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: peer1-logs-claim
+  namespace: mddz
+spec:
+  storageClassName: pxb-Rs-xf-oc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: peer2-logs-claim
+  namespace: mddz
+spec:
+  storageClassName: pxb-Rs-xf-oc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: peer3-logs-claim
+  namespace: mddz
+spec:
+  storageClassName: pxb-Rs-xf-oc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: config-server-logs-claim
+  namespace: mddz
+spec:
+  storageClassName: pxb-Rs-xf-oc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: email-sender-logs-claim
+  namespace: mddz
+spec:
+  storageClassName: pxb-Rs-xf-oc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: report-uploader-logs-claim
+  namespace: mddz
+spec:
+  storageClassName: pxb-Rs-xf-oc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: configuration-fetcher-logs-claim
+  namespace: mddz
+spec:
+  storageClassName: pxb-Rs-xf-oc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: file-handler-logs-claim
+  namespace: mddz
+spec:
+  storageClassName: pxb-Rs-xf-oc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: box-connector-logs-claim
+  namespace: mddz
+spec:
+  storageClassName: pxb-Rs-xf-oc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: notification-fetcher-logs-claim
+  namespace: mddz
+spec:
+  storageClassName: pxb-Rs-xf-oc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi

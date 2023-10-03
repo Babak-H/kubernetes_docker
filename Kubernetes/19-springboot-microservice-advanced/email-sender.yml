@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: email-sender
+  namespace: mddz
+spec:
+  selector:
+    matchLabels:
+      app: email-sender
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      labels:
+        app: email-sender
+    spec:
+      volumes:
+        - name: email-sender-logs
+          persistentVolumeClaim:
+            claimName: email-sender-logs-claim
+      securityContext:
+        runAsUser: 10000
+        runAsGroup: 10001
+      imagePullSecrets:
+        - name: my-reg-key
+      containers:
+      - name: email-sender
+        image: registry.****.****.com/mddz/email-sender:1.0.0-SNAPSHOT
+        securityContext:
+          allowPrivilegeEscalation: false
+        ports:
+        - containerPort: 8084
+        imagePullPolicy: Always
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "remote,dev"
+
+        - name: mddz_EUREKA_PEER1_HOST
+          value: service-registry-service-1
+
+        - name: mddz_EUREKA_PEER2_HOST
+          value: service-registry-service-2
+
+        - name: mddz_EUREKA_PEER3_HOST
+          value: service-registry-service-3
+
+        - name: mddz_EUREKA_PORT
+          value: "8761"
+
+        - name: mddz_EUREKA_USER_NAME
+          value: "***"
+
+        - name: MSDDR_EUREKA_USER_PASSWORD
+          valueFrom:
+           secretKeyRef:
+            name: eureka-pass-secret
+            key: eureka-pass
+            optional: false
+            
+        resources:
+          requests:
+            cpu: 100m
+            memory: 150Mi
+          limits:
+            cpu: 200m
+            memory: 300Mi
+        volumeMounts:
+          - name: email-sender-logs
+            mountPath: /home/mddz/logs/email-sender/${INSTANCE}  
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: email-sender-service
+  namespace: mddz
+spec:
+  type: NodePort
+  selector:
+    app: email-sender
+  ports:
+  - protocol: TCP
+    port: 8084
+    targetPort: 8084

@@ -1,0 +1,54 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-controller
+  namespace: mddz
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  rules:
+  - host: mddz.kubmun.***.***.com
+    http:
+      paths:
+      - backend:
+          serviceName: service-registry-service-1
+          servicePort: 8761
+        path: /peer1
+        pathType: Prefix
+
+      - backend:
+          serviceName: service-registry-service-2
+          servicePort: 8762
+        path: /peer2
+        pathType: Prefix
+
+      - backend:
+          serviceName: service-registry-service-3
+          servicePort: 8763
+        path: /peer3
+        pathType: Prefix
+
+      - backend:
+          serviceName: cloud-admin-service
+          servicePort: 9999
+        path: /cloud-admin
+        pathType: Prefix
+
+      - backend:
+          serviceName: configuration-fetcher-service
+          servicePort: 8081
+        path: /configuration-fetcher
+        pathType: Prefix
+
+      - backend:
+          serviceName: report-uploader-service
+          servicePort: 8085
+        path: /report-uploader
+        pathType: Prefix
+
+# we use already existing TLS encryption
+  tls:
+  - hosts:
+    - mddz.kubmun.***.***.com
+
