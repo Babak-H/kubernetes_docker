@@ -1,0 +1,495 @@
+# frontend
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transporter
+  namespace: rim
+spec:
+  selector:
+    matchLabels:
+      app: transporter
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: transporter
+    spec:
+      imagePullSecrets:
+        - name: my-reg-key
+      containers:
+      - name: transporter
+        image: registry.code.***.com/rim/frontend/transporter-frontend:latest
+        ports:
+        - containerPort: 8080
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: 50m
+            memory: 50Mi
+          limits:
+            cpu: 200m
+            memory: 200Mi
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: transporter
+  namespace: rim
+spec:
+  type: ClusterIP
+  selector:
+    app: transporter
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080 
+
+---
+
+# authentication
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transporter-authentication
+  namespace: rim
+spec:
+  selector:
+    matchLabels:
+      app: transporter-authentication
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: transporter-authentication
+    spec:
+      volumes:
+        - name: authentication-vol
+          persistentVolumeClaim:
+            claimName: authentication-claim
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+      imagePullSecrets:
+        - name: my-reg-key
+      containers:
+      - name: transporter-authentication
+        image: registry.code.****.com/rim/java/transporter-authentication:1.0.0-SNAPSHOT
+        ports:
+        - containerPort: 8082
+        imagePullPolicy: Always
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "dev"
+
+        - name: RIM_EUREKA_HOST
+          value: transporter-discovery-server
+
+        - name: RIM_ADMIN_HOST
+          value: transporter-admin-server
+
+        - name: EUREKA_INSTANCE_HOSTNAME
+          value: transporter-authentication
+
+        resources:
+          requests:
+            cpu: 50m
+            memory: 150Mi
+          limits:
+            cpu: 200m
+            memory: 300Mi
+        volumeMounts:
+          - name: authentication-vol
+            mountPath: /home/spring/vol/
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: transporter-authentication
+  namespace: rim
+spec:
+  type: ClusterIP
+  selector:
+    app: transporter-authentication
+  ports:
+  - protocol: TCP
+    port: 8082
+    targetPort: 8082
+
+---
+# config-server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transporter-config-server
+  namespace: rim
+spec:
+  selector:
+    matchLabels:
+      app: transporter-config-server
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: transporter-config-server
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+      imagePullSecrets:
+        - name: my-reg-key
+      containers:
+      - name: transporter-config-server
+        image: registry.code.****.com/rim/java/transporter-config-server:1.0.0-SNAPSHOT
+        ports:
+        - containerPort: 8888
+        imagePullPolicy: Always
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "dev"
+
+        - name: RIM_EUREKA_HOST
+          value: transporter-discovery-server
+
+        - name: EUREKA_INSTANCE_HOSTNAME
+          value: transporter-config-server
+
+        - name: RIM_ADMIN_HOST
+          value: transporter-admin-server
+
+        - name: SPRING_CLOUD_CONFIG_SERVER_GIT_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: my-ssh-key
+              key: id_rsa
+
+        - name: SPRING_CLOUD_CONFIG_SERVER_GIT_STRICTHOSTKEYCHECKING
+          value: "false"
+
+        - name: SPRING_CLOUD_CONFIG_SERVER_GIT_IGNORE_LOCAL_SSH_SETTINGS
+          value: "true"
+
+        resources:
+          requests:
+            cpu: 50m
+            memory: 150Mi
+          limits:
+            cpu: 200m
+            memory: 300Mi
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: transporter-config-server
+  namespace: rim
+spec:
+  type: ClusterIP
+  selector:
+    app: transporter-config-server
+  ports:
+  - protocol: TCP
+    port: 8888
+
+---
+# discovery server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transporter-discovery-server
+  namespace: rim
+spec:
+  selector:
+    matchLabels:
+      app: transporter-discovery-server
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: transporter-discovery-server
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+      imagePullSecrets:
+        - name: my-reg-key
+      containers:
+      - name: transporter-discovery-server
+        image: registry.code.****.com/rim/java/transporter-discovery-server:1.0.2
+        ports:
+        - containerPort: 8761
+        imagePullPolicy: Always
+        env:
+          - name: SPRING_PROFILES_ACTIVE
+            value: "dev"
+          - name: RIM_EUREKA_HOST
+            value: transporter-discovery-server
+          - name: RIM_ADMIN_HOST
+            value: transporter-admin-server
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 150Mi
+          limits:
+            cpu: 200m
+            memory: 300Mi
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: transporter-discovery-server
+  namespace: rim
+spec:
+  type: ClusterIP
+  selector:
+    app: transporter-discovery-server
+  ports:
+  - protocol: TCP
+    port: 8761
+    targetPort: 8761
+
+---
+# download
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transporter-download
+  namespace: rim
+spec:
+  selector:
+    matchLabels:
+      app: transporter-download
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: transporter-download
+    spec:
+      volumes:
+        - name: download-vol
+          persistentVolumeClaim:
+            claimName: download-claim
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+      imagePullSecrets:
+        - name: my-reg-key
+      containers:
+      - name: transporter-download
+        image: registry.code.****.com/rim/java/transporter-download:1.0.0-SNAPSHOT
+
+        command: ["/bin/sh"]
+        args: ["-c", "mount -t cifs //dnafiles.***.com/RegalkProduction /home/spring/dnafiles --verbose -o user=****\\rvdrim34,pass=******;"]
+        
+        ports:
+        - containerPort: 8083
+        imagePullPolicy: Always
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "dev"
+
+        - name: RIM_EUREKA_HOST
+          value: transporter-discovery-server
+
+        - name: RIM_ADMIN_HOST
+          value: transporter-admin-server
+
+        - name: EUREKA_INSTANCE_HOSTNAME
+          value: transporter-download
+
+        resources:
+          requests:
+            cpu: 50m
+            memory: 150Mi
+          limits:
+            cpu: 200m
+            memory: 350Mi
+        volumeMounts:
+          - name: download-vol
+            mountPath: /home/spring/vol/
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: transporter-download
+  namespace: rim
+spec:
+  type: ClusterIP
+  selector:
+    app: transporter-download
+  ports:
+  - protocol: TCP
+    port: 8083
+    targetPort: 8083
+
+---
+# gateway
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transporter-gateway
+  namespace: rim
+spec:
+  selector:
+    matchLabels:
+      app: transporter-gateway
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: transporter-gateway
+    spec:
+      volumes:
+        - name: gateway-vol
+          persistentVolumeClaim:
+            claimName: gateway-claim
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+      imagePullSecrets:
+        - name: my-reg-key
+      containers:
+      - name: transporter-gateway
+        image: registry.code.****.com/rim/java/transporter-gateway:1.0.0-SNAPSHOT
+        ports:
+        - containerPort: 8081
+        imagePullPolicy: Always
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "dev"
+
+        - name: RIM_EUREKA_HOST
+          value: transporter-discovery-server
+
+        - name: RIM_ADMIN_HOST
+          value: transporter-admin-server
+
+        - name: EUREKA_INSTANCE_HOSTNAME
+          value: transporter-gateway
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 150Mi
+          limits:
+            cpu: 200m
+            memory: 350Mi
+        volumeMounts:
+          - name: gateway-vol
+            mountPath: /home/spring/vol/
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: transporter-gateway
+  namespace: rim
+spec:
+  type: ClusterIP
+  selector:
+    app: transporter-gateway
+  ports:
+  - protocol: TCP
+    port: 8081
+    targetPort: 8081
+
+
+---
+# volume claims
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gateway-claim
+  namespace: rim
+spec:
+  storageClassName: pxcz-ls-xs-sb
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: authentication-claim
+  namespace: rim
+spec:
+  storageClassName: pxcz-ls-xs-sb
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: user-claim
+  namespace: rim
+spec:
+  storageClassName: pxcz-ls-xs-sb
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: veeva-session-claim
+  namespace: rim
+spec:
+  storageClassName: pxcz-ls-xs-sb
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: download-claim
+  namespace: rim
+spec:
+  storageClassName: pxcz-ls-xs-sb
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: summary-claim
+  namespace: rim
+spec:
+  storageClassName: pxcz-ls-xs-sb
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: upload-claim
+  namespace: rim
+spec:
+  storageClassName: pxcz-ls-xs-sb
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
