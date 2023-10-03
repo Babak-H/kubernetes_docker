@@ -1,0 +1,361 @@
+version: '3.4'
+services:
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat-oss:8.4.3
+    container_name: filebeat
+    volumes:
+      - ./docker/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml
+      - peer1-logs:/usr/share/filebeat/logs/service-registry/peer1
+      - peer2-logs:/usr/share/filebeat/logs/service-registry/peer2
+      - peer3-logs:/usr/share/filebeat/logs/service-registry/peer3
+      - config-server-logs:/usr/share/filebeat/logs/config-server
+      - configuration-fetcher-logs:/usr/share/filebeat/logs/configuration-fetcher
+      - notification-fetcher-logs:/usr/share/filebeat/logs/notification-fetcher
+      - file-handler-logs:/usr/share/filebeat/logs/file-handler
+      - box-connector-logs:/usr/share/filebeat/logs/box-connector
+      - email-sender-logs:/usr/share/filebeat/logs/email-sender
+      - report-uploader-logs:/usr/share/filebeat/logs/report-uploader
+      - cloud-admin-logs:/usr/share/filebeat/logs/cloud-admin
+    command: [ "-e", "--strict.perms=false" ]
+    restart: on-failure
+    healthcheck:
+      test: ps aux | grep filebeat | grep -v grep || exit 1
+
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash-oss:8.5.0
+    container_name: logstash
+    restart: on-failure
+    volumes:
+      - ./docker/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+      - ./docker/logstash/logstash.yml:/usr/share/logstash/config/logstash.yml
+    environment:
+      ELASTICSEARCH_HOST: rbalbpoc.**.****.com
+      ENVIRONMENT: dev
+    healthcheck:
+      test: ps aux | grep /usr/share/logstash | grep -v grep || exit 1
+
+
+  zipkin:
+    image: openzipkin/zipkin-slim:2
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    restart: on-failure
+    healthcheck:
+      test: curl -s -o /dev/null -w "%{http_code}" http://localhost:9411 | grep 404 || exit 1
+
+
+  peer1:
+    image: msdr/service-registry
+    container_name: peer1
+    restart: on-failure
+    env_file:
+      - envs/service-registry/.env.dev
+    environment:
+      #### ENCRYPT_KEY
+      INSTANCE: peer1
+      msdr_EUREKA_PEER1_HOST: peer1
+      msdr_EUREKA_PEER2_HOST: peer2
+      msdr_EUREKA_PEER3_HOST: peer3
+      SPRING_PROFILES_ACTIVE: remote,dev,peer1
+    ports:
+      - "8761:8761"
+    volumes:
+      - peer1-logs:/home/msdr/logs/service-registry/peer1
+    healthcheck:
+      start_period: 20s
+      test: curl -sw '%{http_code}' http://localhost:8761 | grep 401 || exit 1
+
+
+  peer2:
+    image: msdr/service-registry
+    container_name: peer2
+    restart: on-failure
+    env_file:
+      - envs/service-registry/.env.dev
+    environment:
+      #ENCRYPT_KEY
+      INSTANCE: peer2
+      msdr_EUREKA_PEER1_HOST: peer1
+      msdr_EUREKA_PEER2_HOST: peer2
+      msdr_EUREKA_PEER3_HOST: peer3
+      SPRING_PROFILES_ACTIVE: remote,dev,peer2
+    ports:
+      - "8762:8762"
+    volumes:
+      - peer2-logs:/home/msdr/logs/service-registry/peer2
+    healthcheck:
+      start_period: 20s
+      test: curl -sw '%{http_code}' http://localhost:8762 | grep 401 || exit 1
+
+
+  peer3:
+    image: msdr/service-registry
+    container_name: peer3
+    restart: on-failure
+    env_file:
+      - envs/service-registry/.env.dev
+    environment:
+      #ENCRYPT_KEY
+      INSTANCE: peer3
+      msdr_EUREKA_PEER1_HOST: peer1
+      msdr_EUREKA_PEER2_HOST: peer2
+      msdr_EUREKA_PEER3_HOST: peer3
+      SPRING_PROFILES_ACTIVE: remote,dev,peer3
+    ports:
+      - "8763:8763"
+    volumes:
+      - peer3-logs:/home/msdr/logs/service-registry/peer3
+    healthcheck:
+      start_period: 20s
+      test: curl -sw '%{http_code}' http://localhost:8763 | grep 401 || exit 1
+
+
+  config-server:
+    image: msdr/config-server
+    container_name: config-server
+    restart: on-failure
+    depends_on: [ peer1, peer2, peer3 ]
+    env_file:
+      - envs/config-server/.env
+      - envs/config-server/.env.dev
+    environment:
+      #ENCRYPT_KEY
+      #KNOWN_HOSTS
+      msdr_EUREKA_PEER1_HOST: peer1
+      msdr_EUREKA_PEER2_HOST: peer2
+      msdr_EUREKA_PEER3_HOST: peer3
+      SPRING_PROFILES_ACTIVE: remote,dev
+      #SSH_PRIVATE_KEY
+      WAIT_BEFORE: 20
+      WAIT_HOSTS: peer1:8761, peer2:8762, peer3:8763
+      WAIT_TIMEOUT: 600
+    ports:
+      - "8888:8888"
+    volumes:
+      - config-server-logs:/home/msdr/logs/config-server
+    healthcheck:
+      start_period: 30s
+      test: curl -sw '%{http_code}' http://localhost:8888 | grep 401 || exit 1
+
+
+  configuration-fetcher:
+    image: msdr/configuration-fetcher
+    container_name: configuration-fetcher
+    restart: on-failure
+    depends_on: [ peer1, peer2, peer3, config-server]
+    env_file:
+      - envs/configuration-fetcher/.env.dev
+    environment:
+      msdr_EUREKA_PEER1_HOST: peer1
+      msdr_EUREKA_PEER2_HOST: peer2
+      msdr_EUREKA_PEER3_HOST: peer3
+      msdr_EUREKA_USER_NAME: eureka-dev
+      #### msdr_EUREKA_USER_PASSWORD
+      SPRING_PROFILES_ACTIVE: remote,dev
+      SPRING_CLOUD_STREAM_BINDERS_SOLACE_ENVIRONMENT_SOLACE_JAVA_HOST: tcps://*****.****.solace.cloud:55443 
+      WAIT_BEFORE: 40
+      WAIT_HOSTS: peer1:8761, peer2:8762, peer3:8763, config-server:8888
+      WAIT_TIMEOUT: 600
+    ports:
+      - "8081:8081"
+    volumes:
+      - configuration-fetcher-logs:/home/msdr/logs/configuration-fetcher
+    healthcheck:
+      start_period: 50s
+      test: curl -s -o /dev/null -w "%{http_code}" http://localhost:8081 | grep 404 || exit 1
+
+
+  notification-fetcher:
+    image: msdr/notification-fetcher
+    container_name: notification-fetcher
+    restart: on-failure
+    depends_on: [ peer1, peer2, peer3, config-server, configuration-fetcher ]
+    env_file:
+      - envs/notification-fetcher/.env.dev
+    environment:
+      msdr_EUREKA_PEER1_HOST: peer1
+      msdr_EUREKA_PEER2_HOST: peer2
+      msdr_EUREKA_PEER3_HOST: peer3
+      msdr_EUREKA_USER_NAME: eureka-dev
+      #msdr_EUREKA_USER_PASSWORD
+      SPRING_PROFILES_ACTIVE: remote,dev
+      SPRING_CLOUD_STREAM_BINDERS_SOLACE_ENVIRONMENT_SOLACE_JAVA_HOST: tcps://****.****.solace.cloud:55443
+      WAIT_BEFORE: 50
+      WAIT_HOSTS: peer1:8761, peer2:8762, peer3:8763, config-server:8888, configuration-fetcher:8081
+      WAIT_TIMEOUT: 600
+    ports:
+      - "8082:8082"
+    volumes:
+      - notification-fetcher-logs:/home/msdr/logs/notification-fetcher
+    healthcheck:
+      start_period: 65s
+      test: curl -s -o /dev/null -w "%{http_code}" http://localhost:8082 | grep 404 || exit 1
+
+
+  box-connector:
+    image: msdr/box-connector
+    container_name: box-connector
+    restart: on-failure
+    depends_on: [ peer1, peer2, peer3, config-server, configuration-fetcher, notification-fetcher ]
+    env_file:
+      - envs/box-connector/.env.dev
+    environment:
+      msdr_EUREKA_PEER1_HOST: peer1
+      msdr_EUREKA_PEER2_HOST: peer2
+      msdr_EUREKA_PEER3_HOST: peer3
+      msdr_EUREKA_USER_NAME: eureka-dev
+      #msdr_EUREKA_USER_PASSWORD
+      SPRING_PROFILES_ACTIVE: remote,dev
+      WAIT_BEFORE: 65
+      WAIT_HOSTS: peer1:8761, peer2:8762, peer3:8763, config-server:8888, configuration-fetcher:8081, notification-fetcher:8082
+      WAIT_TIMEOUT: 600
+    ports:
+      - "8091:8091"
+    volumes:
+      - box-connector-logs:/home/msdr/logs/box-connector
+    healthcheck:
+      start_period: 75s
+      test: curl -s -o /dev/null -w "%{http_code}" http://localhost:8091 | grep 404 || exit 1
+
+
+  file-handler:
+    image: msdr/file-handler
+    container_name: file-handler
+    restart: on-failure
+    depends_on: [ peer1, peer2, peer3, config-server, configuration-fetcher, notification-fetcher, box-connector ]
+    env_file:
+      - envs/file-handler/.env.dev
+    environment:
+      msdr_EUREKA_PEER1_HOST: peer1
+      msdr_EUREKA_PEER2_HOST: peer2
+      msdr_EUREKA_PEER3_HOST: peer3
+      msdr_EUREKA_USER_NAME: eureka-dev
+      #msdr_EUREKA_USER_PASSWORD
+      SPRING_PROFILES_ACTIVE: remote,dev
+      SPRING_CLOUD_STREAM_BINDERS_SOLACE_ENVIRONMENT_SOLACE_JAVA_HOST: tcps://*****.*****.solace.cloud:55443 
+      WAIT_BEFORE: 75
+      WAIT_HOSTS: peer1:8761, peer2:8762, peer3:8763, config-server:8888, configuration-fetcher:8081, notification-fetcher:8082, box-connector:8091
+      WAIT_TIMEOUT: 600
+    ports:
+      - "8083:8083"
+    volumes:
+      - file-handler-logs:/home/msdr/logs/file-handler
+    healthcheck:
+      start_period: 120s
+      test: curl -s -o /dev/null -w "%{http_code}" http://localhost:8083 | grep 404 || exit 1
+
+
+  email-sender:
+    image: msdr/email-sender
+    container_name: email-sender
+    restart: on-failure
+    depends_on: [ peer1, peer2, peer3, config-server, configuration-fetcher, notification-fetcher, box-connector, file-handler ]
+    env_file:
+      - envs/email-sender/.env.dev
+    environment:
+      msdr_EUREKA_PEER1_HOST: peer1
+      msdr_EUREKA_PEER2_HOST: peer2
+      msdr_EUREKA_PEER3_HOST: peer3
+      msdr_EUREKA_USER_NAME: eureka-dev
+      #msdr_EUREKA_USER_PASSWORD
+      SPRING_PROFILES_ACTIVE: remote,dev
+      SPRING_CLOUD_STREAM_BINDERS_SOLACE_ENVIRONMENT_SOLACE_JAVA_HOST: tcps://*****.*****.solace.cloud:55443
+      WAIT_BEFORE: 120
+      WAIT_HOSTS: peer1:8761, peer2:8762, peer3:8763, config-server:8888, configuration-fetcher:8081, notification-fetcher:8082, box-connector:8091, file-handler:8083
+      WAIT_TIMEOUT: 600
+    ports:
+      - "8084:8084"
+    volumes:
+      - email-sender-logs:/home/msdr/logs/email-sender
+    healthcheck:
+      start_period: 140s
+      test: curl -s -o /dev/null -w "%{http_code}" http://localhost:8084 | grep 404 || exit 1
+
+
+  report-uploader:
+    image: msdr/report-uploader
+    container_name: report-uploader
+    restart: on-failure
+    depends_on: [ peer1, peer2, peer3, config-server, configuration-fetcher, notification-fetcher, box-connector, file-handler, email-sender ]
+    env_file:
+      - envs/report-uploader/.env.dev
+    environment:
+      msdr_EUREKA_PEER1_HOST: peer1
+      msdr_EUREKA_PEER2_HOST: peer2
+      msdr_EUREKA_PEER3_HOST: peer3
+      msdr_EUREKA_USER_NAME: eureka-dev
+      #msdr_EUREKA_USER_PASSWORD
+      SPRING_PROFILES_ACTIVE: remote,dev
+      SPRING_CLOUD_STREAM_BINDERS_SOLACE_ENVIRONMENT_SOLACE_JAVA_HOST: tcps://*****.*****.solace.cloud:55443
+      WAIT_BEFORE: 140
+      WAIT_HOSTS: peer1:8761, peer2:8762, peer3:8763, config-server:8888, configuration-fetcher:8081, notification-fetcher:8082, box-connector:8091, file-handler:8083, email-sender:8084
+      WAIT_TIMEOUT: 600
+    ports:
+      - "8085:8085"
+    volumes:
+      - report-uploader-logs:/home/msdr/logs/report-uploader
+    healthcheck:
+      start_period: 160s
+      test: curl -s -o /dev/null -w "%{http_code}" http://localhost:8085 | grep 404 || exit 1
+
+
+  cloud-admin:
+    image: msdr/cloud-admin
+    container_name: cloud-admin
+    restart: on-failure
+    depends_on: [ peer1, peer2, peer3, config-server, configuration-fetcher, notification-fetcher, box-connector, file-handler, email-sender, report-uploader ]
+    env_file:
+      - envs/cloud-admin/.env.dev
+    environment:
+      #ENCRYPT_KEY
+      msdr_EUREKA_PEER1_HOST: peer1
+      msdr_EUREKA_PEER2_HOST: peer2
+      msdr_EUREKA_PEER3_HOST: peer3
+      msdr_EUREKA_USER_NAME: eureka-dev
+      #msdr_EUREKA_USER_PASSWORD
+      SPRING_PROFILES_ACTIVE: remote,dev
+      WAIT_BEFORE: 170
+      WAIT_HOSTS: peer1:8761, peer2:8762, peer3:8763, config-server:8888, configuration-fetcher:8081, notification-fetcher:8082, box-connector:8091, file-handler:8083, email-sender:8084, report-uploader:8085
+      WAIT_TIMEOUT: 600
+    ports:
+      - "9999:9999"
+    volumes:
+      - cloud-admin-logs:/home/msdr/logs/cloud-admin
+    healthcheck:
+      start_period: 40s
+      test: curl -sw '%{http_code}' http://localhost:9999 | grep 401 || exit 1
+
+      
+  fake-smtp-server:
+    image: rnwood/smtp4dev:3.1.4
+    container_name: 'fake-smtp-server'
+    ports:
+      - '5080:80'
+      - '5025:25'
+    healthcheck:
+      test: curl -f http://localhost:80 || exit 1
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    container_name: 'autoheal'
+    restart: always
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: all
+    volumes:
+      - /mnt/wsl/shared-docker/docker.sock:/var/run/docker.sock
+      #- /var/run/docker.sock:/var/run/docker.sock 
+
+volumes:
+  peer1-logs:
+  peer2-logs:
+  peer3-logs:
+  config-server-logs:
+  configuration-fetcher-logs:
+  notification-fetcher-logs:
+  file-handler-logs:
+  box-connector-logs:
+  email-sender-logs:
+  report-uploader-logs:
+  cloud-admin-logs:

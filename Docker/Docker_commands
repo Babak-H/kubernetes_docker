@@ -1,0 +1,16 @@
+# get password from Jenkins docker image
+docker exec CONTAINER_NAME cat /var/jenkins_home/secrets/initialAdminPassword
+
+# start it with volume
+docker container run -d -p 8080:8080 -v jenkins-vol:/var/jenkins_home --name jenkins-local IMAGE_NAME
+
+# get inside the jenkins container as root user
+docker exec -u 0 -it CONTAINER_NAME bash
+
+# install nodejs and npm
+apt update
+apt install curl
+apt install nodejs npm
+nodejs -v
+npm -v
+

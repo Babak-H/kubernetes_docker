@@ -1,0 +1,18 @@
+services:
+
+  redis:
+    image: redislabs/redismod
+    container_name: redis
+    ports:
+      - '6379:6379'
+      
+  web:
+  # we didn't mention the web image, because we are building it by custom from python base image
+    build: .
+    container_name: web
+    ports:
+      - "50000:50000"
+    volumes:
+      - .:/code
+    depends_on:
+      - redis

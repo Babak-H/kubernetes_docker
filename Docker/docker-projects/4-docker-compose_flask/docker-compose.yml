@@ -1,0 +1,15 @@
+# Versioning is essential to make sure that changes won’t break your applications.
+version: '3'
+#  contains the components of your architecture, so every item below it can be associated with one docker image
+services:
+
+ app:
+   build: .
+   image: takacsmark/flask-redis:1.0
+   environment:
+     - FLASK_ENV=development
+   ports:
+     - 5000:5000
+ 
+ redis:
+   image: redis:4.0.11-alpine

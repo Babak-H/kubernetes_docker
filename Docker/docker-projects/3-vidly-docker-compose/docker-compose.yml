@@ -1,0 +1,49 @@
+# this is the version of the docker-compose that matches our docker application's version
+version: "3.8"
+
+services:
+
+  # we can use whatever name we want for our services (this can also be called frontend)
+  web:
+    # this should point to where the dockerfile for the frontend app is located
+    build: ./frontend
+    image: vidly_web:1
+    ports:
+      - 3000:3000
+    volumes:
+      - ./frontend:/web 
+    # this is the default, what happens when the server crashes
+    restart: no   # for production env, change it to "unless-stopped"
+
+
+  api:
+    build: ./backend
+    image: vidly_api:1 
+    ports:
+      - 3001:3001
+    environment:
+      DB_URL: mongodb://db/vidly
+    volumes:  
+    # in docker-compose we write in relative path (opposite of absolute path in dockerfile)
+    # we map backend folder to app folder inside the container, so there isn't a need to update the image build, each time we make a change in the source file
+      - ./backend:/app
+    # commands from docker-compose will override commands from dockerfile
+    # wait for db container to start, then do the migration process
+    command: ./wait-for db:27017 && migrate-mongo up && npm start 
+    restart: no
+
+  # since we don't use the "build" keywork for this image, there is no need for having a Dockerfile for it
+  db:
+    # for the db, we use an already existing mongoDB image from dockerHub
+    image: mongo:4.0-xenial 
+    ports:
+      - 27017:27017
+    volumes:
+      # we point already existing folder on the host to a folder in container as volume
+      - vidly:/data/db 
+    restart: no
+
+
+volumes:
+  # this is all we have to do for creating a volume
+  vidly:  
