@@ -1,0 +1,13 @@
+apiVersion: 1
+kind: Service
+metadata:
+  name: hello-kube-node-port
+spec:
+  type: NodePort
+  ports:
+    - port: 8080
+      targetPort: 8080
+      # must have a value between 30000 and 32767
+      nodePort: 31515
+  selector:
+    component: web

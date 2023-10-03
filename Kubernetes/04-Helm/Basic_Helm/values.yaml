@@ -1,0 +1,15 @@
+# Default values for kube-prometheus-stack.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+## Using default values from https://github.com/grafana/helm-charts/blob/main/charts/grafana/values.yaml
+##
+grafana:
+  enabled: true
+  ## EDITED BY ME!!
+  adminPassword: admin
+  service:
+    portName: service
+    ## HERE WE ADD OUR OWN CONFIG VAlUES
+    type: NodePort
+    nodePort: 30008

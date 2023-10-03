@@ -1,0 +1,6 @@
+apiVersion: v2
+name: dbie-gke
+description: a helm chart for dbie-gke cluster
+type: application
+version: 0.1.0
+appVersion: "1.16.0"

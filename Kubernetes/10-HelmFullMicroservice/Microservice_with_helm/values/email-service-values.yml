@@ -1,0 +1,10 @@
+appName: emailservice
+appReplicas: 2
+appImage: gcr.io/gooogle-samples/microservices-demo/emailservice
+appVersion: v0.2.3
+containerPort: 8080
+containerEnvVars: 
+- name: PORT
+  value: "8080"
+servicePort: 5000
+# serviceType: ClusterIP  since our value here is same as the default one, we can just leave it to that without re-writing it

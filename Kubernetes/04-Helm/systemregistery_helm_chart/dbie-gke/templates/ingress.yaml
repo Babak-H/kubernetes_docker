@@ -1,0 +1,18 @@
+{{- if .Values.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.appName }}-ingress
+  namespace: {{ .Values.namespace }}
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.class | quote }}
+    kubernetes.io/ingress.regional-static-ip-name: {{ .Values.ingress.StaticIpName | quote  }}
+    ingress.gcp.kubernetes.io/pre-shared-cert: {{ .Values.ingress.preSharedCert | quote  }}
+    kubernetes.io/ingress.allow-http: {{ .Values.ingress.allowHttp | quote  }}
+spec:
+  defaultBackend:
+    service:
+      name: {{ .Values.ingress.serviceName }}
+      port:
+        number: {{ .Values.ingress.servicePort }}
+{{- end }}

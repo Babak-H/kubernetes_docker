@@ -1,0 +1,60 @@
+releases:
+  - name: redis-cart
+    chart: redis
+    values: 
+      - values/redis-values.yaml
+      # override the values from file above (and the default values from the chart)
+      - appReplicas: "3"
+      - volumeName: "redis-cart-data"
+
+
+  - name: emailservice
+    chart: microservice
+    values:
+      - values/email-service-values.yaml
+
+  - name: cartservice
+    chart: microservice
+    values:
+      - values/cart-service-values.yaml    
+
+  - name: currencyservice
+    chart: microservice
+    values:
+      - values/currency-service-values.yaml   
+
+  - name: paymentservice
+    chart: microservice
+    values:
+      - values/payment-service-values.yaml
+
+  - name: recommendationservice
+    chart: microservice
+    values:
+      - values/recommendation-service-values.yaml
+
+  - name: productcatalogservice
+    chart: microservice
+    values:
+      - values/productcatalog-service-values.yaml
+
+  - name: shippingservice
+    chart: microservice
+    values:
+      - values/shipping-service-values.yaml
+
+  - name: adservice
+    chart: microservice
+    values:
+      - values/ad-service-values.yaml
+
+  - name: checkoutservice
+    chart: microservice
+    values:
+      - values/checkout-service-values.yaml
+
+  - name: frontendservice
+    chart: microservice
+    values:
+      - values/frontend-values.yaml
+

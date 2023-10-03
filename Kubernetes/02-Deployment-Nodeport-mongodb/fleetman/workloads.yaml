@@ -1,0 +1,128 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: queue
+spec:
+  selector:
+    matchLabels:
+      app: queue
+  replicas: 1
+  template: # template for the pods
+    metadata:
+      labels:
+        app: queue
+    spec:
+      containers:
+      - name: queue
+        image: richardchesterwood/k8s-fleetman-queue:release2
+        resources:
+          requests:
+          # this container would need at least 300mb of memory to run properly 
+          # giving a pod more ram or cpu, does NOT make it run faster
+            memory: 300M
+            cpu: 100m # value can be "1 core" "0.5 core" "0.1 core" or "100m" meaning "100/1000 core"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: position-simulator
+spec:
+  selector:
+    matchLabels:
+      app: position-simulator
+  replicas: 1
+  template: # template for the pods
+    metadata:
+      labels:
+        app: position-simulator
+    spec:
+      containers:
+      - name: position-simulator
+        image: richardchesterwood/k8s-fleetman-position-simulator:release2
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: production-microservice
+        envFrom: 
+        # this will automatically get all environment variables from configmap files and make them available here.
+        - configMapRef:
+            name: global-database-config-v4
+        resources:
+         # limit looks similar to requests, but acts differently, as it prevents the pod to go any further than mentioned memory or cpu
+          limits:
+            memory: 500M
+            cpu: 200m
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: position-tracker
+spec:
+  selector:
+    matchLabels:
+      app: position-tracker
+  replicas: 1
+  template: # template for the pods
+    metadata:
+      labels:
+        app: position-tracker
+    spec:
+      containers:
+      - name: position-tracker
+        image: richardchesterwood/k8s-fleetman-position-tracker:release3
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: production-microservice
+        volumeMounts: 
+        - name: database-config-volume
+          mountPath: /etc/any/dir/config
+      volumes:
+      - name: database-config-volume
+        configMap:
+          name: global-database-config-v4
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+spec:
+  selector:
+    matchLabels:
+      app: api-gateway
+  replicas: 1
+  template: # template for the pods
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+      - name: api-gateway
+        image: richardchesterwood/k8s-fleetman-api-gateway:resources
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: production-microservice
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+spec:
+  selector:
+    matchLabels:
+      app: webapp
+  replicas: 1
+  template: # template for the pods
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: webapp
+        image: richardchesterwood/k8s-fleetman-webapp-angular:release2
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: production-microservice

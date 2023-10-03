@@ -1,0 +1,10 @@
+releases:
+  - name: alpha
+    chart: dbie-gke
+    values:
+      - values/alpha.yaml
+
+  - name: prod-apac
+    chart: dbie-gke
+    values:
+      - values/prod-apac.yaml

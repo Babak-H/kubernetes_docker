@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata: 
+  name: secure-routing
+  annotations:
+    # https://kubernetes.github.io/ingress-nginx/examples/auth/basic/
+    # type of authentication
+    nginx.ingress.kubernetes.io/auth-type: basic
+    # name of the secret that contains the user/password definitions
+    nginx.ingress.kubernetes.io/auth-secret: basic-auth
+    # message to display with an appropriate context why the authentication is required
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required - foo'
+
+spec: 
+  rules:
+    - host: queue.fleetman.com
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: fleetman-queue
+              service-port: 8161 # as it is visible, ingressController uses local port instead of the node port for connections

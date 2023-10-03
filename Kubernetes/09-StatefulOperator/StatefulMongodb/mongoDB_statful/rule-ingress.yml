@@ -1,0 +1,22 @@
+# these are ingress rules that will connect ingress loadbalancer to the mongo-express cluster, so it can be accessed from outside 
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mongo-express
+  labels:
+    name: mongo-express
+spec:
+  rules:
+  # going to this address will show the user mongo-express UI
+  - host: <YOUR-APPLICATION-DOMAN>  # MY-TEST-APP-INGRESS.COM
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+          # name of our mongo-express Serivce
+            name: mongo-express-service
+            port: 
+              number: 8081

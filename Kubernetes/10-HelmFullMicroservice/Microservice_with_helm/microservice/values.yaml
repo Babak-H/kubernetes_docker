@@ -1,0 +1,13 @@
+# this is the default values file, with default (predefined) values for it, our custom values will replace the ones here
+appName: serviceName
+appReplicas: 2
+appImage: gcr.io/gooogle-samples/microservices-demo/servicename
+appVersion: v0.0.0
+containerPort: 8080
+containerEnvVars: 
+- name: VAR_ONE
+  value: "ValueOne"
+- name: VAR_TWO
+  value: "ValueTwo"
+servicePort: 8080
+serviceType: ClusterIP

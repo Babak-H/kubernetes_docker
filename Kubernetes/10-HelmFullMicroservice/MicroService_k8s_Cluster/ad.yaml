@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adservice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: adservice
+  template:
+    metadata:
+      labels:
+        app: adservice
+    spec:
+      containers:
+      - name: service
+        image: gcr.io/google-samples/microservices-demo/adservice:v0.2.3
+        ports:
+        - containerPort: 9555
+        env:
+        - name: PORT
+          value: "9555"
+
+        # ping the endpoint for the docker image container every 30 seconds to make sure it is working properly
+        livenessProbe:
+          periodSeconds: 30
+          exec:
+            # this command should be given to us from the developer, it can be different in other applications
+            command: ["/bin/grpc_health_probe", "-addr=:9555"]
+
+      # this is same liveness probe, but to show to k8s when the application container is ready to start to receives traffic
+        readinessProbe:
+          periodSeconds: 30
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9555"]
+        
+        resources:
+          # this is the initial amount of hardware that is assigned to this pod
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          # in case of need for more hardware, we limit it to no more than this
+          limits:
+            cpu: 200m
+            memory: 128Mi
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: adservice
+spec:
+  type: ClusterIP
+  selector:
+    app: adservice
+  ports:
+  - protocol: TCP 
+    port: 9555
+    targetPort: 9555

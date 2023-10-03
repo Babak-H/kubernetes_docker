@@ -1,0 +1,35 @@
+appName: schemaregistry
+namespace: dbekfk-schemareg
+# kafka-password: dsadasdasda=
+enabled: false
+notalpha: true
+kafka-password: 
+  valueFrom:
+    secretKeyRef:
+      name: mysecrets
+      key: schema_registery_kafka_config-alpha
+appImageFirst: dfssdfsdfsd.*****.net/prod-infra/solsson/kafka-prometheus-jmx-exporter:latest
+appImageSecond: ctvr-dcr03.int.*****.net/prod-infra/confluentinc/cp-schema-registry:7.4.0
+containerEnvVars:
+- name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
+  value: '"PLAINTEXT://qtvr-akf101:9092,PLAINTEXT://qtvr-akf102:9092,PLAINTEXT://qtvr-akf103:9092,PLAINTEXT://qtvr-akf104:9092"'
+- name: SCHEMA_REGISTRY_LISTENERS
+  value: '"http://0.0.0.0:8081"'
+- name: SCHEMA_REGISTRY_DEBUG
+  value: '"true"'
+- name: SCHEMA_REGISTRY_LOG4J_ROOT_LOGLEVEL
+  value: INFO
+- name: SCHEMA_REGISTRY_INIT_TIMEOUT_MS
+  value: '"800000"'
+- name: SCHEMA_REGISTRY_JMX_PORT
+  value: '"8082"'
+- name: SCHEMA_REGISTRY_JMX_ENABLED
+  value: '"true"'
+- name: SCHEMA_REGISTRY_JMX_OPTS
+  value: '"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.local.only=false -Dcom.sun.management.jmxremote.rmi.port=8082"'
+
+secondVolume:
+ volumeName: jmx-config
+ volumePath: /etc/jmx-schema-registry
+
+serviceType: NodePort

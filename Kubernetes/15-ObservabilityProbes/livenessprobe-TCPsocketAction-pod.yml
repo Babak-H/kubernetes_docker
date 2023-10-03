@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    name: liveness
+  name: liveness-http
+spec:
+  containers:
+    - name: liveness
+      image: k8s.gcr.io/liveness
+      args:
+        - /server
+      livenessProbe:
+        # what to probe
+        tcpSocket:
+          port: 8080
+        initialDelaySeconds: 5
+        periodDelaySeconds: 5
+        failureThreshold: 2
+      resources: {}

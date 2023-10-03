@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: schema-registry-configmap
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.appName }}
+data:
+  schema-registry.jaas: |+
+    SchemaRegistry-Props {
+      org.eclipse.jetty.jaas.spi.PropertyFileLoginModule required
+      file="/etc/schema-registry/config/login.properties"
+      debug="false";
+    };
+  login.properties: |+
+    barney: changeme,user,developer

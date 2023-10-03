@@ -1,0 +1,7 @@
+# parameters for StatefulSet that is used in Helm Chart
+architecture: replicaset
+replicaCount: 3
+persistence:
+  storageClass: "CLUD_STORAGE_THAT_USE"
+auth:
+  rootPassword: sercet-root-pwd

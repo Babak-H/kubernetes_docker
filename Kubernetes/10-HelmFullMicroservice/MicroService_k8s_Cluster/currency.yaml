@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: currencyservice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: currencyservice
+  template:
+    metadata:
+      labels:
+        app: currencyservice
+    spec:
+      containers:
+      - name: service
+        image: gcr.io/google-samples/microservices-demo/currencyservice:v0.2.3
+        ports:
+        - containerPort: 7000
+        env:
+        - name: PORT
+          value: "7000"
+        livenessProbe:
+          periodSeconds: 30
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:7000"]
+        readinessProbe:
+          periodSeconds: 30
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:7000"]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: currencyservice
+spec:
+  type: ClusterIP
+  selector:
+    app: currencyservice
+  ports:
+  - protocol: TCP
+    port: 7000
+    targetPort: 7000

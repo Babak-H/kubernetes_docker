@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.appName }}
+spec:
+  replicas: {{ .Values.appReplicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.appName }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.appName }}
+    spec:
+      containers:
+      - name: {{ .Values.appName }}
+        image: "{{ .Values.appImage }}:{{ .Values.appVersion }}"
+        ports:
+        - containerPort: {{ .Values.containerPort }}
+
+        # this part is the main reason why we need different helm chart for redis, since it is the only deployment that needs Volumes and VolumeMounts
+        # and there are no enviromental variables here
+        volumeMounts:
+        - name: {{ .Values.volumeName }}
+        # this is the default location where redis will save the data
+          mountPath: {{ .Values.containerMountPath }}
+      volumes:
+      - name: {{ .Values.volumeName }}
+        emptydir: {}

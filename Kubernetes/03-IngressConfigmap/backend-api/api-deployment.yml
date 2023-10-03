@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      component: api
+  template:
+    metadata:
+      labels:
+        component: api
+    spec:
+      containers:
+        - name: api
+          image: fhsinchy/notes-api
+          ports:
+            - containerPort: 3000
+          # we have saved these variables inside the ConfigMap file  
+          envFrom:
+            - configMapRef:
+                name: api-config-map
+          env:
+              # spec.containers.env.DB_PASSWORD
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+    

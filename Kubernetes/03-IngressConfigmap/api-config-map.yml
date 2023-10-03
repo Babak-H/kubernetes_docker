@@ -1,0 +1,11 @@
+apiVersion: 1
+kind: ConfigMap
+metadata:
+  name: api-config-map
+# here we save the environmet variables for the whole project
+data:
+  DB_CONNECTION: pg
+  DB_HOST: postgres-cluster-ip-service
+  DB_PORT: '5432'
+  DB_USER: postgres
+  DB_DATABASE: notesdb

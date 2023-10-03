@@ -1,0 +1,50 @@
+appName: schemaregistry
+namespace: dbekfk-schemareg
+kafka-password: ""
+valueFrom:
+  secretKeyRef:
+    name: mysecrets
+    key: schema_registery_kafka_config-apac
+appImageFirst: *****.dev/****-gss-p-devops-gl-01/*****-s-dbie-dkr-release-us-01/kafka-prometheus-jmx-exporter
+appImageSecond: *******.dev/****-gss-p-devops-gl-01/*****-s-dbie-dkr-release-us-01/schemaregistry
+containerEnvVars:
+  - name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
+    value: '"SASL_PLAINTEXT://10.210.0.66:9092,SASL_PLAINTEXT://10.210.0.73:9092,SASL_PLAINTEXT://10.210.0.71:9092"'
+  - name: SCHEMA_REGISTRY_LISTENERS
+    value: '"http://0.0.0.0:8081"'
+  - name: SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL
+    value: '"SASL_PLAINTEXT"'
+  - name: SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM
+    value: '"SCRAM-SHA-256"'
+  - name: SCHEMA_REGISTRY_DEBUG
+    value: '"false"'
+  - name: SCHEMA_REGISTRY_LOG4J_ROOT_LOGLEVEL
+    value: INFO
+  - name: SCHEMA_REGISTRY_INIT_TIMEOUT_MS
+    value: '"800000"'
+  - name: SCHEMA_REGISTRY_JMX_PORT
+    value: '"8082"'
+  - name: SCHEMA_REGISTRY_JMX_ENABLED
+    value: '"true"'
+  - name: SCHEMA_REGISTRY_JMX_OPTS
+    value: '"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.local.only=false -Dcom.sun.management.jmxremote.rmi.port=8082"'
+secondVolume:
+ volumeName: jmx-config
+ volumePath: /etc/jmx-schema-registry
+
+virtualService:
+  name: lp-schemaregistry-app
+  gateway: asmgwy-net/schemaregistry-gwy
+  host: ********.net
+  destHost: schemaregistry-nodeport
+  destHostPort: 8081
+
+ingress:
+  class: gce-internal
+  StaticIpName: ip-schemareg-gkectl-au-prd
+  preSharedCert: au-prd-rrepd-net
+  allowHttp: false
+  serviceName: schemaregistry-nodeport
+  servicePort: 8081
+
+

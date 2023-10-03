@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: productcatalogservice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: productcatalogservice
+  template:
+    metadata:
+      labels:
+        app: productcatalogservice
+    spec:
+      containers:
+      - name: service
+        image: gcr.io/google-samples/microservices-demo/productcatalogservice:v0.2.3
+        ports:
+        - containerPort: 3550
+        env:
+        - name: PORT
+          value: "3550"
+        livenessProbe:
+          periodSeconds: 30
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:3550"]
+        readinessProbe:
+          periodSeconds: 30
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:3550"]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: productcatalogservice
+spec:
+  type: ClusterIP
+  selector:
+    app: productcatalogservice
+  ports:
+  - protocol: TCP
+    port: 3550
+    targetPort: 3550

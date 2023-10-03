@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.appName }}
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.appReplicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.appName }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.appName }}
+      annotations:
+      {{- toYaml .Values.annotations | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Values.containerNameFirst }}
+          image: {{ .Values.appImageFirst }}
+          imagePullPolicy: "IfNotPresent"
+          command:
+          {{- range .Values.firstContainerCommands }}
+          - {{ . }}
+          {{- end }}
+          ports:
+          - containerPort: {{ .Values.firstImagePort }}
+          volumeMounts:
+          - name: jmx-config
+            mountPath: /etc/jmx-schema-registry
+        - name: {{ .Values.appName }}
+          image: {{ .Values.appImageSecond }}
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            - containerPort: {{ .Values.SecondImagePort }}
+          env:
+            - name: SCHEMA_REGISTRY_HOST_NAME
+              valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+            {{- range .Values.containerEnvVars }}
+            - name: {{ .name }}
+              value: {{ .value }}
+            {{- end }}
+
+          {{- if .Values.notalpha }}
+          {{- with .Values.secondVolume }}
+          volumeMounts:
+          - name: {{ .volumeName }}
+            mountPath: {{ .volumePath }}
+          {{- end }}
+          {{- end }}
+      volumes:
+      {{- range .Values.volumes }}
+      - name: {{ .name }}
+        configMap:
+          name: {{ .configmapName }}
+      {{- end }}
+

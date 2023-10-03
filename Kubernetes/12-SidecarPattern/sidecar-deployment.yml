@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: nginx-webapp
+  name: nginx-webapp
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: nginx-webapp
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: nginx-webapp
+    spec:
+      containers:
+        # sidecar 1 container, sends data to volume
+        - image: busybox
+          command: ["/bin/sh"]
+          args:
+            [
+              "-c",
+              "while true; do echo echo $(date -u) 'Hi I am from Sidecar container 1' >> /var/log/index.html; sleep 5;done",
+            ]
+          name: sidecar-container1
+          resources: {}
+          # one volume mounted to all containers
+          volumeMounts:
+            - name: var-logs
+              mountPath: /var/log
+
+        # sidecar 2, also sends data to volume
+        - image: busybox
+          command: ["/bin/sh"]
+          args:
+            [
+              "-c",
+              "while true; do echo echo $(date -u) 'Hi I am from Sidecar container 2' >> /var/log/index.html; sleep 5;done",
+            ]
+          name: sidecar-container2
+          resources: {}
+          # one volume mounted to all containers
+          volumeMounts:
+            - name: var-logs
+              mountPath: /var/log
+
+        # main container of the deployment, shows the data downloaded from sidecars
+        - image: nginx
+          name: main-container
+          resources: {}
+          ports:
+            - containerPort: 80
+          # one volume mounted to all containers
+          volumeMounts:
+            - name: var-logs
+              mountPath: /usr/share/nginx/html
+
+      dnsPolicy: Default
+
+      volumes:
+        - name: var-logs
+          emptyDir: {}
+status: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-webapp
+  labels:
+    run: nginx-webapp
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+  selector:
+    app: nginx-webapp
+  type: NodePort

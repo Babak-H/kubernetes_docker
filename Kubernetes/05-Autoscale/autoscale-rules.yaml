@@ -1,0 +1,16 @@
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-gateway
+  namespace: default
+spec:
+  maxReplicas: 4
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: extensions/v1beta1
+    kind: Deployment
+    name: api-gateway
+  targetCPUUtilizationPercentage: 400
+
+
+# if you apply this file via "kubectl apply -f" command, it will create autoscaling hpa on the desired pod
