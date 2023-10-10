@@ -1,3 +1,11 @@
+**** difference between docker EXPOSE and docker PUBLISH
+EXPOSE => by default all ports in docker container are open, when you write "EXPOSE 8080" you just document that this is an open port so others know it
+PUBLISH => "docker run -d -p 8080 an_image" By default, when you create a container, it does not publish any of its ports to the outside world. To make a port available to services outside of Docker, or to Docker containers which are not connected to the container's network, use the --publish or -p flag. This creates a firewall rule which maps a container port to a port on the Docker host.
+
+**** difference between docker COPY and docker ADD
+COPY => COPY takes in a source and destination. It only lets you copy in a local or directory from your host (the machine-building the Docker image) into the Docker image itself. COPY <src> <dest>
+ADD => ADD  does that same but in addition, it also supports 2 other sources. A URL instead of a local file/directory or Extract tar from the source directory into the destination. ADD <src> <dest>
+
 # get password from Jenkins docker image
 docker exec CONTAINER_NAME cat /var/jenkins_home/secrets/initialAdminPassword
 
