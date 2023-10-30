@@ -7,13 +7,8 @@ services: # services is a list of images with their detail
     image: jupyter
     ports:  # ports for the image
       - "8888:8888"
-    # link for the connection to the second image
-    links:
-      - postgres
-    volumes:  # volumes for how to access files between host and container
-          - "./notebooks:/notebooks" 
-          - "./data:/data"
 
+      
   postgres: # second image
     image: postgres
     restart: always
@@ -21,3 +16,11 @@ services: # services is a list of images with their detail
       POSTGRES_USER: data
       POSTGRES_PASSWORD: data
       POSTGRES_DB: data
+
+      
+    # link for the connection to the second image
+    links:
+      - postgres
+    volumes:  # volumes for how to access files between host and container
+          - "./notebooks:/notebooks" 
+          - "./data:/data"
