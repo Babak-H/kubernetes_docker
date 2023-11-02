@@ -41,6 +41,161 @@ docker container run -d -p 8080:8080 -v jenkins-vol:/var/jenkins_home --name jen
 # get inside the jenkins container as root user
 docker exec -u 0 -it CONTAINER_NAME bash
 ==================================================================
+difference between alpine docker image and busybox docker image?
+    FROM scratch
+    ADD alpine-minirootfs-3.12.7-x86_64.tar.gz /
+    CMD ["/bin/sh"]
+
+    FROM scratch
+    ADD busybox.tar.xz /
+    CMD ["sh"]
+
+The key difference between these is that older versions of the busybox image statically linked busybox against glibc (current versions dynamically link busybox against glibc due to use of libnss even in static configuration), 
+whereas the alpine image dynamically links against musl libc. 
+
+glibc is built for performance and portability over size (often adding special-case performance optimizations that take a large amount of code).
+
+musl libc is built for correctness and size over performance (it's willing to be somewhat slower to have a smaller code size and to run in less RAM); and it's much more aggressive about having correct error reporting (instead of just exiting immediately) in the face of resource exhaustion.
+==================================================================
+Difference between Docker ENTRYPOINT and Kubernetes container spec COMMAND?
+
+Kubernetes provides us with multiple options on how to use these commands:
+When you override the default Entrypoint and CMD in Kubernetes .yaml file, these rules apply:
+- If you do not supply command or args for a Container, the defaults defined in the Docker image are used.
+- If you supply only args for a Container, the default Entrypoint defined in the Docker image is run with the args that you supplied.
+- If you supply a command for a Container, only the supplied command is used. The default EntryPoint and the default Cmd defined in the Docker image are ignored. Your command is run with the args supplied (or no args if none supplied).
+
+    FROM alpine:latest
+    COPY "executable_file" /
+    ENTRYPOINT [ "./executable_file" ]
+
+
+     spec:
+        containers:
+          - name: container_name
+            image: image_name
+            args: ["arg1", "arg2", "arg3"]
+==================================================================
+Error: docker: "build" requires 1 argument. See 'docker build --help'
+
+        FROM        ubuntu:14.04
+        RUN         apt-get update && apt-get install -y redis-server
+        EXPOSE      6379
+        ENTRYPOINT  ["/usr/bin/redis-server"]
+        
+        
+        sudo docker build -t myrepo/redis
+        docker: "build" requires 1 argument. See 'docker build --help'.
+
+You need to add a dot, which means to use the Dockerfile in the local directory.
+For example:
+        docker build -t mytag .
+It means you use the Dockerfile in the local directory, and if you use docker 1.5 you can specify a Dockerfile elsewhere. Extract from the help output from docker build:
+
+-f, --file=""   Name of the Dockerfile(Default is 'Dockerfile' at context root)
+==================================================================
+Docker error: invalid reference format: repository name must be lowercase
+
+A "reference" in docker is a pointer to an image. It may be an image name, an image ID, include a registry server in the name, use a sha256 tag to 
+pin the image, and anything else that can be used to point to the image you want to run.
+
+The invalid reference format error message means docker cannot convert the string you've provided to an image. This may be an invalid name, or it may be from a parsing error earlier in the docker run command line if that's how you run the image.
+
+If the name itself is invalid, the repository name must be lowercase means you use upper case characters in your registry or repository name, e.g. YourImageName:latest should be yourimagename:latest.
+==================================================================
+Multiple commands on docker ENTRYPOINT
+
+In case you want to run many commands at entrypoint, the best idea is to create a bash file. For example commands.sh like this
+        #!/bin/bash
+        mkdir /root/.ssh
+        echo "Something"
+        cd tmp
+        ls
+        ...
+
+And then, in your DockerFile, set entrypoint to commands.sh file (that execute and run all your commands inside)
+        COPY commands.sh /scripts/commands.sh
+        RUN ["chmod", "+x", "/scripts/commands.sh"]
+        ENTRYPOINT ["/scripts/commands.sh"]
+==================================================================
+How to give folder permissions inside a docker container Folder?
+
+        FROM python:2.7
+        RUN pip install Flask==0.11.1 
+        RUN useradd -ms /bin/bash admin
+        COPY app /app
+        WORKDIR /app
+        # set the owner of the folder to ADMIN user (we are still as root)
+        RUN chown -R admin:admin /app
+        RUN chmod 755 /app
+        # then change to the ADMIN user
+        USER admin
+        CMD ["python", "app.py"] 
+==================================================================
+Relationship between Dockerfile EXPOSE and Kubernetes service/container ports?
+
+The EXPOSE option in a Dockerfile serves merely as a documentation, it is not exposing the port
+
+In Kubernetes the equivalent to EXPOSE is spec.containers.ports.containerPort. You can set both values to whatever you want and it will not change 
+anything at all. Think of it as a comment.
+
+With a Service object it is a little bit different, there the values do matter. A Service takes spec.ports.port and spec.ports.targetPort. If you don't specify the targetPort 
+then Kubernetes will set its value to the same as specified in port (which is required).
+==================================================================
+How to copy multiple files in one layer using a Dockerfile?
+
+Basic (incorrect way)
+        COPY README.md ./
+        COPY package.json ./
+        COPY gulpfile.js ./
+        COPY __BUILD_NUMBER ./
+
+correct way
+        COPY <all> <the> <things> <last-arg-is-destination>/
+        COPY README.md package.json gulpfile.js __BUILD_NUMBER ./
+==================================================================
+How to force Docker for a clean build of an image?
+
+# this will use cache
+$ docker build -t u12_core -f u12_core .
+
+# this will rebuild the image from start
+$ docker build --pull --no-cache -t u12_core -f u12_core . --tag myimage:version .
+==================================================================
+Multiple RUN vs. single chained RUN in Dockerfile, which is better?
+
+        FROM busybox
+        RUN echo This is the A > a
+        RUN echo This is the B > b
+        RUN echo This is the C > c
+
+
+        FROM busybox
+        RUN echo This is the A > a &&\
+            echo This is the B > b &&\
+            echo This is the C > c
+
+Minimize the number of layer
+You need to find the balance between readability (and thus long-term maintainability) of the Dockerfile and minimizing the number of layers it uses.
+Be strategic and cautious about the number of layers you use.
+==================================================================
+How do I Docker COPY as non root?
+While building a Docker image, how do I COPY a file into the image so that the resulting file is owned by a user other than root?
+
+Use the optional flag --chown=<user>:<group> with either the ADD or COPY commands.
+COPY --chown=<user>:<group> <hostPath> <containerPath>
+
+    FROM node:lts-alpine3.17
+    RUN addgroup app && adduser -S -G app app
+    RUN mkdir /app && chown app:app /app
+    USER app
+    WORKDIR /app
+    COPY --chown=app:app package*.json .
+==================================================================
+run container as root user
+
+$ docker run --user <user> <image>
+==================================================================
 # install nodejs and npm
 apt update
 apt install curl
