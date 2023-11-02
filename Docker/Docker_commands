@@ -1,20 +1,46 @@
 **** difference between docker EXPOSE and docker PUBLISH
 EXPOSE => by default all ports in docker container are open, when you write "EXPOSE 8080" you just document that this is an open port so others know it
 PUBLISH => "docker run -d -p 8080 an_image" By default, when you create a container, it does not publish any of its ports to the outside world. To make a port available to services outside of Docker, or to Docker containers which are not connected to the container's network, use the --publish or -p flag. This creates a firewall rule which maps a container port to a port on the Docker host.
-
+==================================================================
 **** difference between docker COPY and docker ADD
 COPY => COPY takes in a source and destination. It only lets you copy in a local or directory from your host (the machine-building the Docker image) into the Docker image itself. COPY <src> <dest>
 ADD => ADD  does that same but in addition, it also supports 2 other sources. A URL instead of a local file/directory or Extract tar from the source directory into the destination. ADD <src> <dest>
-
+==================================================================
+* main difference between "docker container" and "virtual machines" is that the container does NOT have access or emulate machine hardware.
+==================================================================
 # get password from Jenkins docker image
 docker exec CONTAINER_NAME cat /var/jenkins_home/secrets/initialAdminPassword
+==================================================================
+** Docker image works in Layers, each line of code in the docker file is a layer that is built on top of previous layers, in case of chaning in the source code of the imagem, ONLY the lines (layers) that have any sort of CHANGE 
+will be recreated.
 
+    FROM node:14-slim        ## Good
+    WORKDIR /app
+    COPY package.json yarn.lock /app
+    RUN yarn install 
+    COPY ./app
+    CMD yarn build
+
+    FROM node:14-slim      ## Bad
+    WORKDIR /app
+    COPY ./app
+    RUN yarn install 
+    CMD yarn build
+
+** in the first docker image, we copy and install all the package dependancies (COPY package.json yarn.lock /app , RUN yarn install) BEFORE copying the source code and building the application, because this way the dependancies won't be reinstalled
+each time we change the source code (COPY ./app , CMD yarn build) . in the second image we copy and install everything in a single layer, so by each source code change all the dependancies will be re-installed.
+==================================================================
+running Docker on Gitlab:
+
+docker run -v ./folder:opt/folder  => in here the ./folder means that there is a folder in the home directory of the source code named "folder"
+docker run -v folder:/opt/folder   => folder refers to the directory with same name where the docker daemon is installed on the gitlab runner
+==================================================================
 # start it with volume
 docker container run -d -p 8080:8080 -v jenkins-vol:/var/jenkins_home --name jenkins-local IMAGE_NAME
-
+==================================================================
 # get inside the jenkins container as root user
 docker exec -u 0 -it CONTAINER_NAME bash
-
+==================================================================
 # install nodejs and npm
 apt update
 apt install curl
