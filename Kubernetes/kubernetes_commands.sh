@@ -286,3 +286,11 @@ kgp # will show all runnig pods
 
 # check if the user can have access to do an action
 kubectl auth can-i create deployments --namespace dev
+
+# get only events for a pod
+kubectl get event --namespace MY-NAMESPACE --field-selector involvedObject.name=MY-POD-ID
+
+# get deployment/pod's logs when 
+kubectl logs deployment/<name-of-deployment> # logs of deployment
+kubectl logs -f deployment/<name-of-deployment> # follow logs
+kubectl describe deploy <name-of-deployment>
