@@ -294,3 +294,6 @@ kubectl get event --namespace MY-NAMESPACE --field-selector involvedObject.name=
 kubectl logs deployment/<name-of-deployment> # logs of deployment
 kubectl logs -f deployment/<name-of-deployment> # follow logs
 kubectl describe deploy <name-of-deployment>
+
+# copy file from pod/deployment to local machine
+kubectl cp default/postgresl-7c8b9-qs67z:/home/backup/db ./Desktop/mydb1.dmp
