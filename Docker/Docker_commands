@@ -248,4 +248,10 @@ apt install curl
 apt install nodejs npm
 nodejs -v
 npm -v
+=====================================================
+Add CURL to Alpine linux image
 
+apk update
+apk add curl
+curl Option... URL
+=====================================================
