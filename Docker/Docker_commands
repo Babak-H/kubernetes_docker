@@ -255,3 +255,7 @@ apk update
 apk add curl
 curl Option... URL
 =====================================================
+a docker image that contains kubectl (good for running kubernetes command on gitlab shell): https://hub.docker.com/r/portainer/kubectl-shell
+
+a docker image that contains kubectl and envsubst (useful for editing yaml files and running kubernetes on gitlab): https://hub.docker.com/r/thisiskj/kubectl-envsubst
+=====================================================
