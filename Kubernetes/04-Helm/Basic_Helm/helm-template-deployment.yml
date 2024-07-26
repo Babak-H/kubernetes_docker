@@ -1,5 +1,4 @@
 # all the values in here can come from a values.yml file that contains them
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
