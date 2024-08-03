@@ -1,0 +1,162 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: goproxy
+  labels:
+    app: goproxy
+spec:
+  containers:
+    - name: goproxy
+      image: k8s.gcr.io/goproxy:0.1
+      resources:
+        limits:
+          memory: 128Mi
+          cpu: 200m
+      ports:
+        - containerPort: 8080
+      # to check if container is ready to accept traffic
+      # wait at first 5 seconds, then 10s each round until it is ready to accept traffic
+      # readiness probe will run DURING THE WHOLE POD LIFECYCLE
+      readinessProbe:
+        tcpSocket:
+          port: 8080
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        failureThreshold: 5
+      # to check if the code is running or not
+      # at first delay 25 seconds, then check every 20 until we see if the container is running the code
+      # if failure is consistent, will cause the pod to RESTART
+      # will run DURING THE WHOLE POD LIFECYCLE
+      livenessProbe:
+        tcpSocket:
+          port: 8080
+        initialDelaySeconds: 20
+        periodSeconds: 25
+        failureThreshold: 3
+      # the first probe, this is when application starts to run
+      # try 3 times and after each time wait 10 seconds, if then api is unavailable, restart the pod
+      startupProbe:
+        httpGet:
+          path: /healthz
+          port: 80
+        failureThreshold: 3
+        periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    name: simple-webapp
+  name: simple-webapp
+spec:
+  containers:
+    - name: simple-webapp
+      image: webapp-delayed-start
+      ports:
+        - containerPort: 8080
+          protocol: TCP
+      env:
+        - name: APP_START_DELAY
+          value: "80"
+      readinessProbe:
+        failureThreshold: 4 # after 4 failures to get 200 response from the endpoint, pod will be restarted
+        httpGet:
+          path: /ready  
+          port: 8080
+          scheme: HTTP
+        initialDelaySeconds: 10  # wait for 10 seconds after pod starts to check the readiness
+        periodSeconds: 5 # do it every 5 seconds
+      livenessProbe:
+        httpGet:
+          path: /live 
+          port: 8080
+        initialDelaySeconds: 80
+        periodSeconds: 1
+        failureThreshold: 4
+
+
+# command execution probe
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    name: liveness-pod
+  name: liveness-http
+spec:
+  containers:
+    - name: liveness
+      image: k8s.gcr.io/liveness
+      command: ["/bin/sh", "-c", "touch /tmp/healthy; sleep 15; rm -rf /tmp/healthy; sleep 3600;"]
+      livenessProbe:
+        exec:
+          command:
+            - cat
+            - /tmp/healthy
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        failureThreshold: 3
+
+
+#TCP Socket Probe
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    name: liveness
+  name: liveness-http
+spec:
+  containers:
+    - name: liveness
+      image: k8s.gcr.io/liveness
+      args:
+        - /server
+      livenessProbe:
+        tcpSocket:
+          port: 8080
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        failureThreshold: 2
+
+
+# we have several pods in different namespaces, find the ones that are not ready. troubleshoot and
+# fix the issues. add check to restart the container if command "ls /var/www/html/file_check" fails => LivenessProbe
+# this check should start with delay of 10 sec and run every 60 secs
+# restart the container => liveness Probe
+# kubectl get pod --all-namespaces
+# kubectl describe pod nginx1401 -n dev1401 => we can see the readiness probe has failed
+# kubectl get pod nginx1401 -n dev1401 -o yaml > nginx.yaml
+# vi nginx.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx1401
+  namespace: dev1401
+spec:
+  containers:
+    - image: nginx:alpine
+      name: nginx
+      ports:
+        - containerPort: 9080
+          protocol: TCP
+      livenessProbe:
+        exec:
+          command: 
+            - ls
+            - /var/www/html/file_check
+        initialDelaySeconds: 10
+        periodSeconds: 60
+      readinessProbe:
+        failureThreshold: 3
+        httpGet:
+          port: 9080
+          path: /
+        periodSeconds: 10
+        timeoutSeconds: 1  # timeoutSeconds specifies how quickly the container needs to respond to the probe
+        
+# kubectl replace -f nginx1401.yaml --force => since we are replacing already existing pod
+
