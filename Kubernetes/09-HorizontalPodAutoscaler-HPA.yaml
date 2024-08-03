@@ -23,8 +23,7 @@ spec:
     kind: Deployment
     name: api-gateway
 
-
-
+    
 ---
 apiVersion: apps/v1
 kind: Deployment
