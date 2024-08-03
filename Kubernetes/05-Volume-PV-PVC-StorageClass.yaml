@@ -1,0 +1,441 @@
+# Pod with Volumes defined inside it
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: num-generator
+spec:
+  containers:
+    - name: alpine
+      image: alpine
+      command: ["/bin/bash", "-c"]
+      args: ["shuf -i 0-100 -n 1 >> /opt/number.out;"]
+      volumeMounts:
+        # where to put the data inside the container pod
+        - mountPath: /opt
+          # name of the volume
+          name: data-volume
+  volumes:
+    # this is local volume,its local only to this Node
+    - name: data-volume
+      # type of Volume is hostPath
+      hostPath:
+        path: /data
+        type: Directory
+    # this is remote volume on EBS volume on AWS
+    - name: data-volume-ebs
+      # type of volume is awsElasticBlockStore
+      awsElasticBlockStore:
+        volumeID: "******"
+        fsType: ext4
+
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-vol1
+spec:
+  
+  accessModes:
+    - ReadWriteOnce
+  # what happens when volume is released from PVC
+  persistentVolumeReclaimPolicy: Retain # this is the default
+  capacity:
+    storage: 1Gi
+  # here we mention type of the volume
+  awsElasticBlockStore:
+    volumeID: "*******"
+    fsType: ext4
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: myclaim
+spec:
+  # this will choose only PV with same access mode
+  accessModes:
+    - ReadWriteOnce
+  # PV size should be same or bigger but NOT smaller
+  resources:
+    requests:
+      storage: 500Mi
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+    - name: myfrontend
+      image: nginx
+      volumeMounts:
+        - mountPath: "/var/www/html"
+          name: mypv
+  volumes:
+    - name: mypv
+      persistentVolumeClaim:
+        claimName: myclaim
+
+
+# What type of volume is used to mount a Microsoft Azure Data Disk into a Pod? => azureDisk
+# What volume type is to be used to mount a directory from the node on which the pod is running? => hostPath
+# What volume type is used to store data in a Pod only as long as that Pod is running on that node? When the Pod is deleted the files are to be deleted as well. => emptyDir
+# fc volume type => An fc volume type allows an existing fibre channel block storage volume to mount in a Pod. You can specify
+                  # single or multiple target worldwide names (WWNs) using the parameter targetWWNs in your Volume configuration. If multiple WWNs are specified,
+                  # targetWWNs expect that those WWNs are from multi-path connections.
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-log
+spec:
+  persistentVolumeReclaimPolicy: Retain
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 100Mi
+  hostPath:
+    path: /pv/log
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: claim-log-1
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Mi
+
+# even when your PVC is smaller than PV, when you claim it you get the whole size of PV
+# if you try to delete a PVC while it is being used by a deployment, it will be stuck at "Terminating" state
+
+# we can create a storage class object instead of PV for cloud volumes
+# we don't define the size here
+# this is also called dynamic provisioning
+# StorageClass
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: google-storage
+provisioner: kubernetes.io/gce-pd
+# do not create the PV when PVC calims it, do it when PVC,PV are bound to a Pod
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  type: pd-standard
+  replication-type: none
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: myclaim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: google-storage
+  resources:
+    requests:
+      storage: 500Mi
+
+#  Normal  WaitForFirstConsumer  5s (x8 over 97s)  persistent-volume-controller  waiting for first consumer to be created before binding => this means no pod is consuming the PVC
+# this happens when we have "volumeBindingMode: WaitForFirstConsumer" in SC, so it won't bind unless PVC is connected to pod
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-storage
+spec:
+  # storage class name is to make sure specific PV connects to specific PVC, when several PVs have correct accessMode and capacity
+  storageClassName: mylocalstorage
+  capacity:
+    storage: 5Gi  # this should be same as or bigger than the PersistentVolumeClaim
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/new/directory/structure/"
+    type: DirectoryOrCreate
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongo-pvc
+spec:
+  storageClassName: mylocalstorage  # this will connect PVC and  PV together through class name (binding)
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: database-persistent-volume-claim
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: database-persistent-volume
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/data"
+
+
+# deployment using PVC and PV
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgress-Deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      component: postgres
+  template:
+    metadata:
+      labels:
+        component: postgres
+    spec:
+      volumes:
+        - name: postgres-storage
+          persistenceVolumeClaim:
+            claimName: postgres-storage-claim
+      containers:
+        - name: postgres
+          image: fhsinchy/notes-postgres
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - mountPath: /var/lib/postgres/data  # the directory where this volume will be mounted
+              subPath: postgres # directory that will be created inside the volume MountPath
+              name: postgres-storage
+          env:
+            - name: POSTGRESS_DB
+              value: noteDB
+            - name: POSTGRESS_PASSWORD
+              value: 63eaQB9wtLqmNBpg
+
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: test-volume
+  labels:
+    failure-domain.beta.kubernetes.io/zone: us-central1-a__us-central1-b
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteOnce
+  # type of PV
+  gcePersistentDisk:
+    pdName: my-data-disk
+    fsType: ext4
+
+# Persistentvolume with NodeAffinity
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: example-pv
+spec:
+  capacity:
+    storage: 200Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: local-storage
+  local:
+    path: /mnt/disks/ss1
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - example-node
+
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: storage-class-test
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: io1
+  iopsPerGB: "10"
+  fsType: ext4
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  # persistent volume claim accesses the above created Storage class
+  storageClassName: storage-class-test
+
+# Two PVC connecting to same StorageClass
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: my-other-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: storage-class-test
+
+
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-name
+spec:
+  storageClassName: manual
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+
+# Pod with Configmap as Volume
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod-0
+  labels:
+    run: mypod-0
+spec:
+  containers:
+    - name: busybox-container-0
+      image: busybox
+      volumeMounts:
+        - mountPath: /etc/config
+          name: config-dir
+  volumes:
+    - name: config-dir
+      configMap:
+        name: bb-configmap
+
+
+# pod with Secret as Volume
+---
+kind: Pod
+apiVersion: v1
+metadata:
+  name: mypo-1
+spec:
+  containers:
+    - name: busybox-container-1
+      image: busybox
+      volumeMounts:
+        - mountPath: /etc/secret
+          name: secret-dir
+          readOnly: true
+  volumes:
+    - name: secret-dir
+      secret:
+        secretName: bb-secret
+
+
+# PVC
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: 
+  name: jekyll-site
+  namespace: development
+spec:
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+      
+# pod
+---
+apiVersion: v1
+kind: Pod 
+metadata: 
+  name: jekyll  
+  namespace: development
+  labels:
+    name: jekyll
+spec: 
+  initContainers:
+    - name: copy-jekyll-site
+      image: kodekloud/jekyll
+      command: ["jekyll", "new", "/site"]
+      volumeMounts:
+        - name: site
+          mountPath: /site
+  containers:
+    - name: jekyll
+      image: kodekloud/jekyll-serve
+      volumeMounts:
+        - name: site
+          mountPath: /site
+  volumes:
+    - name: site
+      persistentVolumeClaim: 
+        claimName: jekyll-site
+
+# service
+---
+apiVersion: v1
+kind: Service 
+metadata: 
+  name: jekyll
+  namespace: development  
+spec:
+  type: NodePort
+  selector:
+    name: jekyll
+  ports:
+    - targetPort: 4000
+      port: 8080
+      nodePort: 30097
