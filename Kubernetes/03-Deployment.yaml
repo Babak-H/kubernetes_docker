@@ -1,0 +1,242 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-deployment
+spec:
+  replicas: 3
+  selector:
+    # this should be the same as the labels we have for pod/template
+    matchLabels:
+      component: api
+  # this section is same in both Pod and Deployment
+  template:
+    metadata:
+      labels:
+        component: api
+    spec:
+      containers:
+        - name: api
+          image: fhsinchy/notes-api
+          ports:
+            - containerPort: 3000
+          env:
+            - name: DB_CONNECTION
+              value: pg
+            - name: DB_HOST
+              value: postgres-clusterip-service
+            - name: DB_PORT
+              value: '5432'
+            - name: DB_USER
+              value: postgres
+            - name: DB_DATABASE
+              value: notesdb
+            - name: DB_PASSWORD
+              value: 63eaQB9wtLqmNBpg
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-loadbalancer-service
+spec:
+  type: LoadBalancer
+  selector:
+    # this should match the "spec.template.metadata.labels" in deployment
+    component: api
+  ports:
+    - port: 3000 # service
+      targetPort: 3000 # pod
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+spec:
+  minReadySeconds: 2 # default is zero, it will at ATLEAST 2 seconds to be ready for this deployment
+  selector:
+    matchLabels:
+      app: webapp
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+        - name: webapp
+          image: richardchesterwood/k8s-fleetman-webapp-angular:release0-5
+
+
+# multi-container / sidecar deployment
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: nginx-webapp
+  name: nginx-webapp
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: nginx-webapp
+  template:
+    metadata:
+      labels:
+        app: nginx-webapp
+    spec:
+      containers:
+        - name: sidecar-container-1
+          image: busybox
+          command: ["/bin/sh"]
+          args: ["-c", "while true; do echo echo $(date -u) 'Hi I am from Sidecar container 1' >> /var/log/index.html; sleep 5;done"]
+          volumeMounts:
+            - mountPath: /var/log
+              name: var-logs
+        # sidecar 2, also sends data to volume
+        - name: sidecar-container2
+          image: busybox
+          command: ["/bin/sh"]
+          args: ["-c", "while true; do echo echo $(date -u) 'Hi I am from Sidecar container 2' >> /var/log/index.html; sleep 5;done"]
+          # one volume mounted to all containers
+          volumeMounts:
+            - name: var-logs
+              mountPath: /var/log
+        # main container of the deployment, shows the data downloaded from sidecars
+        - name: main-container
+          image: nginx
+          ports:
+            - containerPort: 80
+          # one volume mounted to all containers
+          volumeMounts:
+            - name: var-logs
+              mountPath: /usr/share/nginx/html
+      volumes:
+        - name: var-logs
+          emptyDir: {}
+
+
+# NodePort service for above deployment
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-webapp
+  labels:
+    run: nginx-webapp
+spec:
+  selector:
+    app: nginx-webapp
+  type: NodePort
+  ports:
+    - port: 80
+      protocol: TCP
+
+
+# Deployment with Several Volumes
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: elastic
+spec:
+  selector:
+    matchLabels:
+      app: elastic
+  template:
+    metadata:
+      labels:
+        app: elastic
+    spec:
+      containers:
+        - name: elastic-container
+          image: elastic:latest
+          ports:
+            - containerPort: 9200
+          volumeMounts:
+            - mountPath: /var/lib/data
+              name: es-persistent-storage
+            - mountPath: /var/lib/secret
+              name: es-secret-dir
+            - mountPath: /var/lib/config
+              name: es-config-dir
+      volumes:
+        - name: es-persistent-storage
+          persistentVolumeClaim:
+            claimName: es-pv-claim
+        # this is not a normal volume, but comes from configMap
+        - name: es-secret-dir
+          secret:
+            secretName: es-secret
+        # this is not a normal volume, but comes from configMap
+        - name: es-config-dir
+          configMap:
+            name: es-config-map
+
+
+# deployment with securityContext
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-deployment-secure
+  labels:
+    app: secure-app
+spec:
+  selector:
+    matchLabels:
+      app: test-deployment-secure
+  template:
+    metadata:
+      labels:
+        app: test-deployment-secure
+    spec:
+      containers:
+      - name: ubuntu
+        image: ubuntu
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 3000
+          fsGroup: 2000
+
+
+# kubectl create deploy redis --image=redis:alpine --replicas=1 --dry-run=client - o yaml > redis.yaml
+# vi redis.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: "0.2"
+          volumeMounts:
+            - name: data
+              mountPath: /redis-master-data
+            - name: redis-config
+              mountPath: /redis-master
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: redis-config
+          configMap:
+            name: redis-config
