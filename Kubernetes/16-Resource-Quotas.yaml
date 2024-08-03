@@ -1,0 +1,103 @@
+# resource Quota for the whole Namespace
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: my-resource-quota
+spec:
+  hard:
+    # in ResourceQuota the cpu value should be String
+    cpu: "4"
+    memory: 10G
+
+
+# Create ResourceQuota in namespace one with hard requests cpu=1, memory=1Gi and hard limits cpu=2, memory=2Gi
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: my-rq
+  namespace: one
+spec:
+  hard:
+    requests.cpu: "1"  # the total of all cpu requests in the namespace one should be 1 vcpu or less
+    requests.memory: 1Gi # the total of all memory requests in the namespace one should be 1 gigabyte or less
+    limits.cpu: "2"
+    limits.memory: 2Gi
+
+
+# Error from server (Forbidden): pods "nginx" is forbidden: maximum memory usage per Container is 500Mi, but limit is 4Gi
+# Limit Range
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cpu-resource-constraint
+spec:
+  limits:
+    - default:  # this section defines defaults amount of limit for cpu given to a container
+        cpu: 500m
+      defaultRequest: # this section defines default request for cpu given to a container
+        cpu: 500m
+      # max and min define the limit range
+      # max limit for a container that can be set inside deployment/pod
+      max:
+        cpu: "1"
+      # min request for a container that can be set inside deployment/pod
+      min:
+        cpu: 100m
+      type: Container
+
+
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: memory-resource-constraint
+spec:
+  limits:
+    - default:  # default limit
+        memory: 1Gi
+      defaultRequest:
+        memory: 1Gi
+      max:  # max limit for a container that can be set inside deployment/pod
+        memory: 1Gi
+      min:   # min request for a container that can be set inside deployment/pod
+        memory: 500Mi
+      type: Container
+
+
+# Create a namespace named one with a LimitRange that limits pod memory to a max of 500Mi and min of 100Mi
+# k create ns one
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: my-ns-limit
+  namespace: one
+spec: 
+  limits:
+    - max: 
+        memory: 500Mi
+      min:
+        memory: 100Mi
+      type: Container
+      
+# The Pod "nginx" is invalid: spec.containers[0].resources.requests: Invalid value: "512Mi": must be less than or equal to memory limit of 500Mi
+
+# ResourceQuota => defines total hardware usage for the whole namespace
+# LimitRange => defines the detailed memory/cpu for each pod/deployment inside the namespace
+
+# Create the YAML for a new ResourceQuota called 'myrq' with hard limits of 1 CPU, 1G memory and 2 pods without creating it
+# k create quota myrq --hard=cpu=1,memory=1G,pods=2 --dry-run=client -oyaml > rq.yaml
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: myrq
+spec:
+  hard:
+    cpu: "1"
+    memory: 1G
+    pods: "2"
+    
