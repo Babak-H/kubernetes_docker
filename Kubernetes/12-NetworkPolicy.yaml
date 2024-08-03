@@ -1,0 +1,175 @@
+# k get networkpolicy
+# if we create a networkPolicy and add policy types but no specific policy, it will deny everything
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-policy
+spec:
+  # only apply this policy to pods that have this label in them
+  # use labels to select a group of pods for which the rules will be applied to.
+  podSelector:
+    matchLabels:
+      role: db
+  # apply ingress (incoming) and egress (outgoing) policies
+  # can be Ingress and Egress or both. this will determine if the rules will be applied to incoming
+  # and/or outgoing traffic. if not defined, then Ingress will be enabled and Egress only when there are rules defined.
+  policyTypes:
+    - Ingress
+    - Egress
+# these sections allow a list of from (Ingress) or to (Egress) and port blocks. each from/to block contains a range of IPs (ipBlock)
+# and/or a list of namespaces selected by label (namespaceSelector), and/or a list of pods by label (podSelector) that select which
+# IPs, namespaces or pods our target can talk to. the ports block define which ports are affected by this rule.
+
+  # Traffic that comes to this pod
+  ingress:
+    - from:
+        # allow traffic from pods with such label
+      - podSelector:
+          matchLabels:
+            name: api-pod
+          # allow traffic from this namespace to access this pod
+      - namespaceSelector:
+          matchLabels:
+            name: prod
+        # allow traffic to this pod, from this ip range
+      - ipBlock:
+          cidr: 192.168.5.10/32
+      # all these traffic can only come in through this port range
+      ports:
+          - protocol: TCP
+            port: 3306
+  # traffic going outside this pod
+  egress:
+    - to:
+        # allow traffic to go out to this ip range
+        - ipBlock:
+            cidr: 192.168.5.10/32
+      # allow traffic to only go out via port 80
+      ports:
+        - protocol: TCP
+          port: 80
+
+          
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: internal-policy
+spec:
+  podSelector:
+    matchLabels:
+      name: internal
+  policyTypes:
+  - Egress
+  - Ingress
+  # we have no ingress policy at the moment, so keep it empty dict
+  ingress:
+    - {}
+  egress:
+    # Traffic to mysql pod is ONLY allowed on port 3306
+    - to:
+        - podSelector:
+            matchLabels:
+              name: mysql
+      ports:
+        - protocol: TCP
+          port: 3306
+    # traffic to payroll pod is ONLY allowed in port 8080
+    - to:
+        - podSelector:
+            matchLabels:
+              name: payroll
+      ports:
+        - protocol: TCP
+          port: 8080
+    # these ports are allowed on all outgoing pods
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+
+
+# we have a pod named secure-pod and a service called secure-service and Incoming and Outgoing traffic are not working
+# make sure pod web-color can access secure-pod
+# DO NOT ALTER EXISTING OBJECTS!!
+
+# k get pod => make sure pod is running
+# k get svc => make sure service works, its clusterip on port 80
+
+# k get netpol => check if there are any networkpolicies
+# k describe netpol default-deny => we can see allowing ingress traffic is set to <none>
+# we can create a new network policy that allows incoming traffic (netpols work in addition to each other)
+# k get pod --show-label => check what label is secure-pod using, we need it when creating network policy 
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: 
+  name: secure-policy
+spec:
+  podSelector:
+    matchLabels: 
+      run: secure-pod 
+  policyTypes:
+  - Ingress 
+  ingress:  
+    - from:
+        - podSelector:
+            matchLabels:
+              name: webapp-color
+      ports:
+        - protocol: TCP
+          port: 80
+
+# k exec -it webapp-color -- sh # exec into pod webapp-color
+# nc -v -z -w 2 secure-server 80 # try connecting from inside this pod to secure-pod's service
+
+
+# NetworkPolicy for Redis deployment
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-access
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              access: redis
+      # even if they don't mention in the question details, Always add the access port for ingress and egress, otherwise netpol might not work
+      ports:
+        - protocol: TCP
+          port: 6379
+
+
+# we have a nginx deployment named nginx (it has label "app: nginx" on pods)
+# Create a NetworkPolicy so that only pods with labels 'access: granted' can access the deployment and apply it => only needs Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: granted-np
+spec:
+  podSelector:
+    matchLabels:
+      app: nginx
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              access: granted
+      ports:
+        - protocol: TCP
+          port: 80
+
+# k run busybox --image=busybox -- wget http://nginx:80  # this will be stuck at downloading the html file
+# k run busybox1 --image=busybox -l access=granted -- wget http://nginx:80  # this will work
