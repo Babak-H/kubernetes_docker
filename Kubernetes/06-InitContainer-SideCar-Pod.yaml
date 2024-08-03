@@ -1,0 +1,149 @@
+# pod with init container
+# When a POD is first created the initContainer is run, and the process in the initContainer must run to a completion before
+# the real container hosting the application starts. You can configure multiple such initContainers as well
+# In that case each init container is run one at a time in sequential order.
+# If any of the initContainers fail to complete, Kubernetes restarts the Pod repeatedly until the Init Container succeeds.
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-with-init
+  labels:
+    name: my-app-with-init
+spec:
+  # First we run the init container 1, then init container2, and at last the main app container. This is very useful for cases when you have to wait for another server to come up before running your app.
+  initContainers:
+    - name: init-myservice
+      image: busybox:1.28
+      # check every 2 seconds for the server to be running
+      command: ["sh", "-c", "until nslookup mysvc.namespace.svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+    - name: init-db
+      image: busybox:1.28
+      # check every 2 seconds, for db to be running
+      command: ["sh", "-c", "until nslookup mydb.namespace.svc.cluster.local; do echo waiting for mydb; sleep 2; done"]
+  containers:
+    - name: my-app-with-init
+      image: busybox
+      ports:
+        - containerPort: 80
+      resources:
+        limits:
+          memory: 64Mi
+          cpu: 50m
+
+
+# init-container for a pod that downloads something and puts it inside the volume that main container uses
+# init containers get "terminated" aftern they are finished running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: init-demo
+spec:
+  # here we have initial containers that run BEFORE the main app starts
+  initContainers:
+    - name: install
+      image: busybox
+      command: ["wget", "-0", "/work-dir/index.html", "http://info.cern.ch"]
+      volumeMounts:
+        - name: workdir
+          mountPath: "/work-dir"
+  containers:
+    # the main container of the app
+    - name: nginx
+      image: nginx
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 250m
+          memory: 256Mi
+      ports:
+        - containerPort: 80
+      # mount the downloaded html page in the nginx folder to be visible as web page
+      volumeMounts:
+        - name: workdir
+          mountPath: /usr/share/nginx/html
+  # init-container adds data to this volume and later, main container uses it
+  volumes:
+    - name: workdir
+      emptyDir: {}
+
+
+# In a multi-container pod, each container is expected to run a process that stays alive as long as the POD's lifecycle. For example in the multi-container
+# pod that we talked about earlier that has a web application and logging agent, both the containers are expected to stay alive at all times. The process running
+# in the log agent container is expected to stay alive as long as the web application is running. If any of them fails, the POD restarts.
+# But at times you may want to run a process that runs to completion in a container. For example a process that pulls a code or binary from a repository that will be used by
+# the main web application. That is a task that will be run only one time when the pod is first created. Or a process that waits for an external service or
+# database to be up before the actual application starts. That's where initContainers comes in.
+# An initContainer is configured in a pod like all other containers, except that it is specified inside a initContainers section, like this:
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels:
+    app: myapp
+spec:
+  initContainers:
+    # the init container will download this repo and then stop
+    - name: init-myservice
+      image: busybox
+      command: ["sh", "-c", "git clone <some-repository-that-will-be-used-by-application>"]
+  containers:
+    - name: myapp-container
+      image: busybox:1.28
+      command: ["sh", "-c", "echo the app is running! && sleep 3600"]
+
+
+# multi-container pod with SideCar
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-pod
+spec:
+  # general SecurityContext that applies to all containers by default
+  securityContext:
+    runAsUser: 1001
+  containers:
+    - image: ubuntu
+      name: web
+      command: ["sleep", "5000"]
+      # this overrides the general SecurityContext
+      securityContext:
+        runAsUser: 1002
+    - image: ubuntu
+      name: sidecar
+      command: ["sleep", "5000"]
+
+
+# multi-container pod with FileBeat sidecar
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app
+  namespace: elastic-stack
+  labels:
+    name: app
+spec:
+  containers:
+    # main container generates logs and saves them at /log on volume
+    - name: app
+      image: event-simulator
+      volumeMounts:
+        - mountPath: /log
+          name: log-volume
+#    sidecar access the logs from volumes, formats them and then exports them
+    - name: sidecar
+      image: filebeat-configured
+      volumeMounts:
+        - mountPath: /var/log/event-simulator
+          name: log-volume
+  volumes:
+    - name: log-volume
+      hostPath:
+        path: /var/log/webapp
+        type: DirectoryOrCreate
