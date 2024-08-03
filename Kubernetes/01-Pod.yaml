@@ -1,0 +1,416 @@
+---
+apiVersion: v1 # current version of the pod
+kind: Pod # kind/type of the resource
+metadata:
+  name: mysql  # name of the pod
+  labels:
+    # pod labels
+    app: mysql
+    component: db
+# pod specification
+spec:
+  containers:
+    - name: mysql # container name
+      image: mysql:5 # container image
+      ports:
+        - containerPort: 3306
+      # environment variables of the pod
+      env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "password"
+        - name: MYSQL_DATABASE
+          value: "fleet-man"
+          
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: queue
+  # we set labels to pods and then use selectors in Deployments, Services,... to choose them
+  labels:
+    app: queue
+spec:
+  containers:
+    - name: queue
+      image: richardchesterwood/k8s-fleetman-queue:release1
+
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hello-kube-world
+  labels:
+    component: web
+    name: hello-kube
+spec:
+  containers:
+    - name: hello-kube
+      image: fhsinchy/hello-kube
+      # ports exposed on the pod from container
+      ports:
+        - containerPort: 80
+
+# service for exposing the pod above
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-kube-loadbalancer-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80 # port on Service
+      targetPort: 80 # port on Pod
+  selector: # we select the pod based on the labels it has
+    component: web
+
+
+# pod with commands and SecurityContext
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubuntu-sleeper
+  namespace: default
+spec:
+  containers:
+    - name: ubuntu-sleepr
+      image: ubuntu
+      # the command will force the pod to sleep for 4800 seconds after starting
+      command: ["/bin/bash", "sleep 4800"]
+      securityContext:
+        # add SYS_TIME and NET_ADMIN
+        capabilities:
+          add: ["SYS_TIME", "NET_ADMIN"]
+
+
+# change the pod to run as ROOT user and add SYS_TIME capability
+#kubectl get pod a[[-sec-kff345 -o yaml > app-sec.yaml
+#vi app-sec.yaml
+# do the editing
+# k replace -f app-sec.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pd
+spec:
+  containers:
+    - name: ubuntu
+      image: ubuntu
+      command:
+        - sleep
+        - "3600"
+      securityContext:
+        runAsUser: 0 # setting user to 0 , means we run it as user ROOT
+        capabilities:
+          add: ["SYS_TIME"]
+
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sidecar-container-demo
+spec:
+  containers:
+    - image: busybox
+      name: sidecar-container
+      # matches docker's entrypoint concept, and whatever is specified here, is run as the main process of the container
+      # don't specify "command" in pod, if the docker image has "ENTRYPOINT" already
+      command: ["/bin/sh"]
+      # matches docker's "command" concept, whatever is specified here, is passed as command-line argument to the entrypoint
+      args: ["-c", "while true; do echo $(date -u) 'Hi I am from Sidecar container' >> /var/log/index.html; sleep 5; done"]
+      volumeMounts:
+        # both containers access a shared volume
+        - name: var-logs
+          mountPath: /var/log
+    - image: nginx
+      name: main-container
+      ports:
+        - containerPort: 80
+      volumeMounts:
+        - mountPath: /usr/share/nginx/html
+          name: var-logs
+  volumes:
+    - name: var-logs
+      emptyDir: {}
+
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: command-demo
+  labels:
+    purpose: demonstrate-command
+spec:
+  # only restart the pod if it fails (do not restart when pod finishes the job and is in completed state)
+  restartPolicy: OnFailure
+  containers:
+  - name: command-demo-container
+    image: debian
+    command: ["printenv"]
+    args: ["HOSTNAME", "KUBERNETES_PORT"]
+
+
+# access environment variable inside command
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: command-demo-1
+  labels:
+    purpose: demonstrate-command-1
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: command-demo-container-1
+    image: debian
+    env:
+      - name: MESSAGE
+        value: "hello world"
+    command: ["/bin/echo"]
+    args: ["$(MESSAGE)"]
+
+# run while loop inside the pod command
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: command-demo-2
+  labels:
+    purpose: demonstrate-command-2
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: command-demo-container-2
+    image: debian
+    command: ["/bin/bash"]
+    args: ["-c", "while true; do echo 'Welcome to JournalDev'; sleep 100; done"]
+
+
+# pod with NFS type volume without PVC
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+spec:
+  containers:
+  - image: registry.k8s.io/test-webserver
+    name: test-container
+  volumeMounts:
+    - mountPath: /my-nfs-data
+      name: test-volume
+  volumes:
+    - name: test-volume
+      nfs:
+        server: my-nfs-server.example.com
+        path: /my-nfs-volume
+        readOnly: true
+
+
+# sharing storage between kubernetes pods
+# to share volume between multiple pods, create PVC with access mode: ReadWriteMany
+# best type for shared volume is NFS
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: my-pvc
+spec: 
+  accessModes: 
+    - ReadWriteMany
+  storageClassName: myvolume
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp1
+  labels:
+    name: myapp1
+spec:
+  containers:
+  - name: myapp1
+    image: busybox
+    volumeMounts:
+      - mountPath:  /data
+        name: data
+        # this file will be used as the volume
+        subPath: app1
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: 'my-pvc'
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp2
+  labels:
+    name: myapp2
+spec:
+  containers:
+  - name: myapp2
+    image: busybox
+    volumeMounts:
+      - mountPath: /data
+        name: data
+        # using same volume, but another file in here
+        subPath: app2
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: 'my-pvc'
+
+
+# run a pod as specific user
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-pod
+spec:
+  containers:
+  - name: ubuntu
+    image: ubuntu
+    securityContext:
+      runAsUser: 1000
+      capabilities:
+        add: ["MAC_ADMIN"]
+
+
+# when editing a pod on the command-line, only these changes are allowed
+# container image
+# init container image
+# toleration
+
+# Resource Requessts and Limits (for each container inside a pod)
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi 
+      limits:
+        cpu: 200m
+        memory: 512Mi
+
+
+# Create a pod with nginx container exposed on port 80. Add a busybox init container which downloads a page using
+# "wget -O /work-dir/index.html http://neverssl.com/online". Make a volume of type emptyDir and mount it in both containers. For the nginx container, mount it on
+# "/usr/share/nginx/html" and for the init-container, mount it on "/work-dir". When done, get the IP of the created pod
+# k run nginx --image=nginx --port=80 --dry-run=client -o yaml > po.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  volumes:
+    - name: vol
+      emptyDir: {}
+  initContainers:
+    - name: busybox
+      image: busybox
+      volumeMounts:
+        - name: vol
+          mountPath: /work-dir
+      # download file from the http address and save in in /work-dir as html page, later use same page for index at main container
+      command: ["/bin/sh", "-c", "wget -O /work-dir/index.html http://neverssl.com/online"]
+  containers:
+    - image: nginx
+      name: nginx
+      volumeMounts:
+        - mountPath: /usr/share/nginx/html
+          name: vol
+
+#If the file doesn't show on the second pod but it shows on the first, it has most likely been scheduled on a different node.
+# check which nodes the pods are on
+# k get po busybox -o wide
+# k get po busybox2 -o wide
+# If they are on different nodes, you won't see the file, because we used the hostPath volume type. If you need to access the same files in a multi-node cluster, you need a volume 
+# type that is independent of a specific node. There are lots of different types per cloud provider (see here), a general solution could be to use NFS.
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: myvolume
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+    - ReadWriteMany
+  storageClassName: normal
+  # hostPath only works on ONE node
+  hostPath:
+    path: /etc/foo
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mypvc
+spec:
+  storageClassName: normal
+  resources:
+    requests:
+      storage: 4Gi
+  accessModes:
+  - ReadWriteMany
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox1
+spec:
+  volumes:
+    - name: my-vol
+      persistentVolumeClaim:
+        claimName: mypvc
+  containers:
+    - name: busybox
+      image: busybox
+      command: ["/bin/sh","-c","sleep 3600"]
+      volumeMounts:
+      - name: my-vol
+        mountPath: /etc/foo
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox2
+spec:
+  volumes:
+    - name: my-vol
+      persistentVolumeClaim:
+        claimName: mypvc
+  containers:
+    - name: busybox
+      image: busybox
+      command: ["/bin/sh","-c","sleep 3600"]
+      volumeMounts:
+      - name: my-vol
+        mountPath: /etc/foo
