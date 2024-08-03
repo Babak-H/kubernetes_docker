@@ -1,0 +1,85 @@
+# this pod will do the math operation, go to completed state, restart and do it again until restart threshold is reached
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: math-pod
+spec:
+  containers:
+    - name: math-add
+      image: ubuntu
+      command: ["expr", "3", "+", "2"]
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: math-add-job
+spec:
+  completions: 3  # we need 3 successful operations before job is finished
+  parallelism: 2 # how many jobs to run at same time, default is 1
+  # this section is same as Pod
+  template:
+    spec:
+      containers:
+        - name: math-add
+          image: ubuntu
+          command: ['expr', '3', '+', '2']
+      restartPolicy: Never  # Jobs SHOULD HAVE this, so it will not repeat the job after it is done
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: throw-dice-twice
+spec:
+  completions: 3
+  parallelism: 1
+  template:
+    spec:
+      containers:
+        - name: throw-twice
+          image: kodekloud/throw-dice
+      restartPolicy: Never
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pi
+spec:
+  # max seconds to run the job
+  activeDeadlineSeconds: 30
+  # how many pods run at same time
+  parallelism: 3
+  # how many successful pod completions are needed to make a job completed
+  completions: 3
+  template:
+    spec:
+      containers:
+        - name: pi
+          image: perl
+          command: ["perl", "-Mbignum=bpi", "-wle", "print bpi(2000)"]
+      # job restart policy should be NEVER
+      restartPolicy: Never
+
+# k create job whalesay --image=docker/whalesay --dry-run=client -o yaml > job.yaml
+# vi job.yaml
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: whalesay
+spec:
+  parallelism: 1 # default
+  completions: 10
+  backoffLimit: 6
+  template:
+    spec:
+      containers:
+        - name: whalesay
+          image: docker/whalesay
+          command: ["/bin/sh", "-c", "cowsay I am going to ace CKAD"]
+      restartPolicy: Never
+
+# k get job whalesay
