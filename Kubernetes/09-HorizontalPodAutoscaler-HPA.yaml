@@ -1,0 +1,80 @@
+# if you apply this file via "kubectl apply -f" command, it will create autoscaling hpa on the desired deployment
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-gateway-hpa
+spec:
+  # max number of pods allowed for deployment
+  maxReplicas: 4
+  # min number of pods per deployment
+  minReplicas: 1
+  # target cpu level at 45% on each pod, if the cpu utilization goes higher, increase the number of pods
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 45
+  # which deployments this will be applied to
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-gateway
+
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: php-apache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+      env: prod
+  template:
+    metadata:
+      labels:
+        app: nginx
+        env: prod
+        type: front-end
+    spec:
+      containers:
+        - name: php-apache
+          image: nginx
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 250m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+              cpu: 500m
+
+
+# apply HPA on the deployment above
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: php-apache-HPA
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: php-apache
+  minReplicas: 1
+  maxReplicas: 10
+  # target cpu level at 50% on each pod, if the cpu utilization goes higher, increase the number of pods
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
