@@ -1,0 +1,199 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+  namespace: dev
+rules:
+  # indicates the core API group
+  - apiGroups: [""]
+    # K8s components like pods, deployments,...
+    resources: ["pods"]
+    # the action on a resource, what can the role do
+    verbs: ["list", "get", "create", "update", "delete"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+    # only allow access to specific pods, granular access
+    resourceNames:
+      - "blue"
+      - "orange"
+
+# RoleBinding connects a Role to Users and Groups
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devuser-developer-binding
+  namespace: dev
+# subjects to be binded to the Role, can be Users or Groups or ServiceAccounts
+subjects:
+  - kind: User
+    name: dev-user
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role # this must be Role or ClusterRole
+  name: developer
+  apiGroup: rbac.authorization.k8s.io
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+  namespace: blue
+rules:
+  - apiGroups:
+      - apps
+    # only allow operations on pods with this specific name
+    resourceNames:
+      - dark-blue-app
+    resources:
+      - pods
+    verbs:
+      - get
+      - watch
+      - create
+      - delete
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    verbs:
+      - create
+
+
+# ClusterRole for administrating Nodes
+# ClusterRoles aren't bound to specific namespace
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-admin
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "watch", "list", "create", "delete"]
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: michelle-binding
+subjects:
+  - kind: User
+    name: michelle
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: node-admin
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: storage-admin
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes", "storageclasses"]
+    verbs: ["get", "watch", "list", "create", "delete"]
+    
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: michelle-storage-admin
+subjects:
+  - kind: User
+    name: michelle
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: storage-admin
+  apiGroup: rbac.authorization.k8s.io
+  
+
+# Group ClusterRole
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: read-secret-global
+subjects:
+  - kind: Group
+    name: cluster-admins
+    apiGroup: rbac.authorization.k8s.io/v1
+roleRef:
+  kind: ClusterRole
+  name: cluster-admins-role
+  apiGroup: rbac.authorization.k8s.io
+
+
+# Role for Jenkins
+---
+apiGroup: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer-android
+rules:
+  - apiGroup: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "create"]
+  - apiGroup: [""]
+    resources: ["secrets"]
+    verb: ["get"]
+
+
+# Granular Role and RoleBinding
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+  namespace: my-app
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "create"]
+    # only allowed on this specific resource inside this namespace
+    resourceNames: ["my-dev-pod"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+    resourceNames: ["my-dev-db"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jane-developer-binding
+  namespace: my-app
+# bind subject
+subjects:
+  - kind: User
+    name: jane
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: developer
+  apiGroup: rbac.authorization.k8s.io
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
