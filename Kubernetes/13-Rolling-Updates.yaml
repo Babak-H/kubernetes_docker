@@ -1,0 +1,117 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-dep
+spec:
+  replicas: 3
+  # this section is for how updating the pods should happen
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: # update step-by-step
+      # how many new pods to create when updating
+      maxSurge: 1
+      # how many of the old pods are allowed to be unavailable at once when updating
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: hello-dep
+  template:
+    metadata:
+      labels:
+        app: hello-dep
+    spec:
+      containers:
+        - name: hello-dep
+          image: k8sacademy/hello-app:1.0
+          resources:
+            limits:
+              memory: 128Mi
+              cpu: 200m
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: deploy-exmp
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+      env: prod
+  # number of pod instances
+  replicas: 3
+  # number of previous iterations to keep
+  revisionHistoryLimit: 3
+  # rolling updates or recreate
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: nginx
+        env: prod
+
+
+# instead of number, we define the surge level via percentage
+---
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      name: webapp
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+
+# this will recreate everything (delete all pods at once and recreate all at once)
+---
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      name: frontend
+    strategy:
+      type: recreate
+
+
+# k create deploy nginx-deploy --image=nginx:1.16 --replicas=4 --dry-run=client -o yaml > deploy.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deploy
+spec:
+  replicas: 4
+  ##############
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 2
+  #############
+  selector:
+    matchLabels:
+      name: nginx
+  template:
+    metadata:
+      labels:
+        name: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.16
+
+# upgrade the image version to 1.17
+# k set image deploy nginx-deploy nginx=nginx:1.17
+
+# undo the update and go back to previous version:
+# k rollout undo deploy nginx-deploy
