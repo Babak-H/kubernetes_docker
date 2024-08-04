@@ -1,0 +1,119 @@
+##### install MongoDB via Helm
+
+# add repo that contains helm charts
+helm repo add bitnami https://charts.bitnami.com/bitnami
+
+# find the needed chart
+helm search repo bitnami/mongo
+
+# install the chart with custom values instead of default and start the cluster with master/worker nodes
+helm install mongodb --values test-mongodb.yaml bitnami/mongodb
+
+# install and run mongo-express UI (its a deployment) to work with mongodb cluster
+k apply -f mongo-express.yaml
+
+# use ingress controller from helm charts / add repo
+helm repo add stable https://kubernetes-charts.storage.googleapis.com/
+
+# install the helm chart that enables ingress controller
+helm install nginx-ingress stable/nginx-ingress --set controller.publishService.enabled=true
+k apply -f ngnix-ingress.yaml
+
+# we can scale up/down our statefulset, data should be persistent
+k scale statefulset/mongodb --replicas=2
+
+
+# mongo-express.yml
+# this deployment allows viewing mongoDB UI
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo-express
+  labels:
+    app: mongo-express
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo-express
+  template:
+    metadata:
+      labels:
+        app: mongo-express
+    spec:
+      containers:
+        - name: mongo-express
+          image: mongo-express
+          resources:
+            limits:
+              memory: 128Mi
+              cpu: 500m
+          ports:
+            - containerPort: 8081
+          # these variables come from the docker page of the mongo-express itself
+          env:
+            - name: ME_CONFIG_MONGODB_SERVER
+              value: mongodb-0.mongodb-headless  # name of the default headless service for mongoDB
+            - name: ME_CONFIG_MONGODB_ADMINUSER
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: mongo-root-username
+            - name: ME_CONFIG_MONGODB_ADMINPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: mongo-root-password
+                  
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-secret
+type: Opaque
+data:
+  mongo-root-username: dXNlcm5hbWU=
+  mongo-root-password: cGFzc3dvcmQ=
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-express-ui-service
+spec:
+  selector:
+    app: mongo-express
+  ports:
+    - port: 8081
+      targetPort: 8081
+      protocol: TCP
+
+# ngnix-ingress.yaml
+# these are ingress rules that will connect ingress controller to the mongo-express cluster, so it can be accessed from outside
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mongo-express-ingress
+  labels:
+    name: mongo-express-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+    # going to this address will show the user mongo-express UI
+    - host: <YOUR-APPLICATION-DOMAIN>  # MY-TEST-APP-INGRESS.COM
+      http:
+        paths:
+          - path: "/mongoui"
+            pathType: Prefix
+            backend:
+              service:
+                name: mongo-express-ui-service
+                port:
+                  number: 8081
+
+
+
+
