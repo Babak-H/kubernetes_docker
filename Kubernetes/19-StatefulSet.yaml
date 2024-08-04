@@ -1,1 +1,101 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
+  replicas: 3
+  podManagementPolicy: OrderedReady  # this way pods are created and deleted in an order one by one (default value)
+  # statefulsets need headless service
+  # this will create hostname(pod name) and subdomain(service name) for all the pods
+  serviceName: mysql-h
+  selector:
+    matchLabels:
+      app: mysql # has to match .spec.template.metadata.labels[0]
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql
+          volumeMounts:
+            - mountPath: /var/lib/mysql
+              name: data-volume
+  # instead of creating PVC for statefulsets, we create volume claim template, this way we will have separate PVC and PV created for each pod instance
+  # storage class should be existing!
+  volumeClaimTemplates:
+    - metadata:
+        name: data-volume
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: google-storage
+        resources:
+          requests:
+            storage: 500M
 
+# headless service does NOT load balance between pods, it only creates ip address and DNS name for them: "podname.headless-servicename.namespace.svc.cluster.local"
+# headless service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-h
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: mysql
+  # this part is only for headless service
+  clusterIP: None
+
+
+# Kakfa StatefulSet
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+spec:
+  serviceName: kafka-service-h
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: nginx:1.25.1
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+
+# pod: kafka-0, kafka-1, kafka-2
+# service address: kafka-0.kafka-service-h.default.svc.cluster.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-service-h
+spec:
+  clusterIP: None
+  selector:
+    app: kafka
+  ports:
+  - port: 9092
