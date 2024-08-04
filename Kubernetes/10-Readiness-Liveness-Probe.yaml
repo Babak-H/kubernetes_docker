@@ -1,3 +1,7 @@
+# LivenessProbe => checks if the container is responsive and is working, can kill and restart the container/pod if failure threshold reaches
+# ReadinessProbe => checks to see if the app is ready to accept traffic, does NOT kill the container/pod, but marks the container as NOT READY and removes it from service endpoint
+# StartupProbe => used for legacy applications, it DELAYS readiness and liveness probes
+
 ---
 apiVersion: v1
 kind: Pod
