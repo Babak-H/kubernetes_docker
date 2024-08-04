@@ -1,0 +1,104 @@
+# admission webhooks are extra level of control over resource creation. we can add extra features to ensure k8s developers use correct
+# configuration when apply resource creation/change
+
+# configure the already created admission webhook, Validating Webhook
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration # or MutatingWebhookConfiguration
+metadata:
+  # name of the webhook
+  name: "pod-policy.example.com"
+webhooks:
+# name of the webhook
+- name: "pod-policy.example.com"
+  clientConfig:
+    # in case the webhook is deployed inside the cluster, in which namespace? via which service?
+    service:
+      namespace: "webhook-namespace"
+      name: "webhook-service"
+    # ca bundle is needed to have TLS connection with the webhook from kubernetes
+    caBundle: "Ce56tdfg..546fgfK"
+  rules:
+  # rules define in which situations we want to send api calls to this webhook for admission
+  - apiGroups: [""]
+    apiVersions: ["v1"]
+    operations: ["CREATE"]
+    resources: ["pods"]
+    scope: "Namespaced"
+
+
+  
+# webhook deployment example
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-server
+  namespace: webhook-demo
+  labels:
+    app: webhook-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webhook-server
+  template:
+    metadata:
+      labels:
+        app: webhook-server
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1234
+      containers:
+      - name: server
+        image: stackrox/admission-controller-webhook-demo:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8443
+          name: webhook-api
+        volumeMounts:
+        - name: webhook-tls-certs
+          mountPath: /run/secrets/tls
+          readOnly: true
+      volumes:
+      - name: webhook-tls-certs
+        secret:
+          secretName: webhook-server-tls
+
+# webhook service for the webhook deployment
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-server
+  namespace: webhook-demo
+spec:
+  selector:
+    app: webhook-server
+  ports:
+    - port: 443  # TLS
+      targetPort: webhook-api  # 8443
+
+# webhook configuration, Mutating Webhook, related to deployment and service above
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: demo-webhook
+webhooks:
+  - name: webhook-server.webhook-demo.svc
+    clientConfig:
+      service:
+        name: webhook-server
+        namespace: webhook-demo
+        path: "/mutate"
+      caBundle: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1J..."
+    rules:
+      - apiVersions: ["v1"]
+        resources: ["pods"]
+        scope: "Namespaced"
+        operations: ["CREATE"]
+    admissionReviewVersions: ["v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
