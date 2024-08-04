@@ -66,6 +66,9 @@ git clone https://github.com/kodekloudhub/kubernetes-metrics-server.git
 cd kubernetes-metrics-server/
 kubectl create -f .
 
+# In Kubernetes versions : X.Y.Z  1.2.2
+# Where X=1 stands for major, Y=2 stands for minor and Z=2 stands for patch version.
+
 ##### Shortcuts ##########################################################################
 
 alias k=kubectl
@@ -203,6 +206,8 @@ k  describe pod
 k cp -n default my-pod:/path/to/file.txt my-file.txt
 # kubectl cp -n <namespace> <source> <pod-name>:<path>
 k cp -n default file.txt my-pod:/path/to/file.txt
+
+k cp -n vault-operators crown-operator-XXXXX:/var/run/kubernetes.io/serviceaccount/data/ca.crt  ./cert_operator-sa 
 
 # Create a busybox pod with 'sleep 3600' as arguments. Copy '/etc/passwd' from the pod to your local folder
 k run busybox --image=busybox -- bin/sh -c "sleep 3600"
@@ -590,6 +595,10 @@ k rollout history deploy nginx --revision=1
 k rollout undo deploy my-test-deploy
 k rollout undo deploy nginx --to-revision=2
 
+# how to restart the whole deployment step-by-step
+# the pods will be restarted based on max surge and max unavailable values
+k rollout restart deploy -n 105250-core-vault
+
 ##### Roles and RoleBindings ##########################################################################
 
 k get role
@@ -667,6 +676,7 @@ k port-forward deploy prometheus-grafana 80:3000
 ##### Nodes and Cluster Configurations #####
 
 # information about public-space namespace and the cluster
+# find what ip address the kubernetes master is running at
 k cluster-info
 
 # show all the components inside the default namespace, related to kube-api
