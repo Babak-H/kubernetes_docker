@@ -1,0 +1,253 @@
+# k label nodes <node-name> <label-key>=<label-value>
+# k label node node01 color=blue
+# k label nodes node03 size=Large
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+spec:
+  containers:
+    - name: myapp-pod
+      image: nginx
+  # this value should be a label set on nodes
+  nodeSelector:
+    size: Large
+
+
+# Node Affinity => similar to nodes selector but more advanced and with more features
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blue
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      run: nginx
+  template:
+    metadata:
+      labels:
+        run: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx
+          imagePullPolicy: Always
+      # this will select Nodes for this pod/deployment that have blue or red as their color label
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: color
+                    operator: In
+                    values:
+                      - blue
+                      - red
+
+# Node Affinity Types
+
+# applied before pod is created
+# requiredDuringSchedulingIgnoredDuringExecution
+# preferredDuringSchedulingIgnoredDuringExecution
+
+# applied before pod creataion and when pod is running
+# requiredDuringSchedulingRequiredDuringExecution
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: red
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      run: nginx
+  template:
+    metadata:
+      labels:
+        run: nginx
+    spec:
+      containers:
+        - name: nginx
+          imagePullPolicy: Always
+          image: nginx
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  # make sure such label exists on the node, doesn't matter what value this key has
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+
+
+# k label node controlplane app_type=beta
+# k get node controlplane --show-labels
+
+# k create deploy beta-app --image=nginx --replicas=3 --dry-run=client -oyaml > deploy.yml
+# vi deploy.yml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beta-apps
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      name: beta-apps
+  template:
+    metadata:
+      labels:
+        name: beta-apps
+    spec:
+      containers:
+        - name: beta-app
+          image: nginx
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: app_type
+                    operator: In
+                    values: ["beta"]
+
+# k get pods -o wide # node should be visible here
+
+
+# kubectl run my-busybox --image=busybox -n dev2406 --dry-run -o yaml --command -- /bin/sh -c "sleep 3600" > my-bb.yaml
+# vi my-bb.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-busybox
+  namespace: dev2406
+spec:
+  volumes:
+    - name: secret-volume
+      secret:
+        secretName: dotfile-secret
+  containers:
+    - image: busybox
+      name: secret
+      command: ["/bin/sh", "-c", "sleep 3600"]
+      # the container should mount a readonly secret volume called secret-volume at path /etc/secret-volume.
+      # secret is called dotfile-secret
+      volumeMounts:
+        - name: secret-volume
+          mountPath: /etc/secret-volume
+          readOnly: true
+  # make sure the pod is scheduled on the controlplane and no other node on the cluster
+  # we don't use nodeSelector or nodeAffinity here, since those are based on node labels and not NodeName
+  nodeName: controlplane
+
+
+# taint = a trace of a bad or undesirable substance or quality
+# taint are sets on nodes
+# tolerations are set on pods (allowing pod to Tolerate the node's taint)
+# taint effect => NoSchedule | PreferNoSchedule | NoExecute
+# k taint nodes NODE-NAME key=value:taint-effect
+
+# k taint node node01 app=blue:NoSchedule
+# k describe node node01 | grep -i Taint
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+spec:
+  containers:
+    - name: nginx-container
+      image: nginx
+  tolerations:
+    - key: app
+      operator: Equal
+      value: blue
+      effect: NoSchedule
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bee
+spec:
+  containers:
+    - name: bee
+      image: nginx
+  tolerations:
+    - key: spray
+      value: mortein
+      operator: Equal
+      effect: NoSchedule
+
+
+# Create a pod that will be deployed to a Node that has the label 'accelerator=nvidia-tesla-p100' => NodeAffinity or NodeSelector
+# first check the nodes and if they don't have the label add it to the
+
+# k label nodes node01 accelerator=nvidia-tesla-p100
+# k get nodes node01 --show-labels
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cuda-test
+spec:
+  containers:
+    - name: cuda-test
+      image: "k8s.gcr.io/cuda-vector-add:v0.1"
+  nodeSelector:
+    accelerator: nvidia-tesla-p100
+
+
+# Create a pod that will be placed on node controlplane. Use nodeSelector and tolerations. => controlplane node has a taint that by default prevents pods to be scheduled on it
+# first check the taints and Labels on controlplane node
+# k describe node controlplane
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: server
+spec:
+  containers:
+    - name: nginx
+      image: nginx
+  nodeSelector:
+    # one of the labels on the node is: "kubernetes.io/hostname=controlplane"
+    kubernetes.io/hostname: controlplane
+  tolerations:
+    # we need to add this toleration to the pod, otherwise with only nodeSelector it won't be scheduled on this Node
+    # Taints:  node-role.kubernetes.io/control-plane:NoSchedule  # this taint has no value for the key
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+
+
+# Taint a node with key 'tier' and value 'frontend' with the effect 'NoSchedule'. Then, create a pod that tolerates this taint
+# k taint node node01 tier=frontend:NoSchedule
+# k describe node node01   # taint should be visible
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: frontend
+spec:
+  containers:
+    - name: nginx
+      image: nginx
+  tolerations:
+    - key: "tier"
+      value: "frontend"
+      operator: "Equal"
+      effect: "NoSchedule"
+
+# taint and toleration => good for preventing pods on a node
+# pod affinity => good for adding pod to specific node
+# use them in combination with each other
