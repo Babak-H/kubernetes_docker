@@ -1,0 +1,164 @@
+# Custom Resource CR
+# It is an extension of the Kubernetes API that is not necessarily available in a default Kubernetes installation.
+---
+apiVersion: flights.com/v1
+kind: FlightTicket
+metadata:
+  name: my-flight-ticket
+spec:
+  from: "Warsaw"
+  to: "Miami"
+  number: 2
+
+
+# Custom Resource Definition CRD
+---
+apiVersion: apiextentions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: flighttickets.flights.com
+spec:
+  scope: Namespaced  # this CRD resources are created inside a namespace
+  group: flight.com  # same as : apiVersion: "flights.com"/v1 in CustomResource
+  names:
+    singular: flightticket
+    plural: flighttickets
+    kind: FlightTicket
+    shortNames:
+      - ft
+  versions:
+    - name: v1  # same as : apiVersion: flights.com/"v1" in CustomResource
+      served: true
+      storage: true
+      schema:
+        # the values here should reflect the ones from spec section of the Custom Resource file
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                from:
+                  type: string
+                to:
+                  type: string
+                number:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  
+# k get flightticket
+
+
+#Custom Resource
+---
+kind: Internal
+apiVersion: datasets.kodekloud.com/v1
+metadata:
+  name: internal-space
+spec:
+  internalLoad: "high"
+  range: 80
+  percentage: "50"
+
+# Custom Resource Definition
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: internals.datasets.kodekloud.com
+spec:
+  group: datasets.kodekloud.com  # apiVersion: "datasets.kodekloud.com"/v1
+  scope: Namespaced
+  names:
+    singular: internal
+    plural: internals
+    kind: Internal
+    shortNames:
+      - int
+  versions:
+    - name: v1  # apiextensions.k8s.io/"v1"
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                internalLoad:
+                  type: string
+                range:
+                  type: integer
+                percentage:
+                  type: string
+
+
+# custom resource of kind Global
+---
+apiVersion: traffic.controller/v1
+kind: Global
+metadata:
+  name: datacenter
+spec:
+  dataField: 2
+  access: true
+
+
+# k apply -f crd.yaml
+# k apply -f cr.yaml
+
+# how to check CRD's Custom Controller
+# k describe crd collectors.monitoring.controller
+# k get crd collectors.monitoring.controller
+
+# each custom resource and CRD needs a custom controller to apply their settings, it is usually written in GO language
+
+# CRD
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: operators.stable.example.com
+spec:
+  group: stable.example.com
+  scope: Namespaced
+  names:
+    singular: operator
+    plural: operators
+    kind: Operator  # kind is normally the CamelCased singular type. Your resource manifests use this.
+    shortNames:
+      - op
+  versions:
+    - name: v1
+      served: true
+      storage: true # One and only one version must be marked as the storage version.
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                email:
+                  type: string
+                name:
+                  type: string
+                age:
+                  type: integer
+
+
+# CR
+# k apply -f cr.yaml
+# k get operator
+# k get operators
+---
+apiVersion: stable.example.com/v1  # spec.group + / + verisons.name
+kind: Operator
+metadata:
+  name: operator-sample
+spec:
+  email: "operator-sample@stable.example.com"
+  name: "operator sample"
+  age: 30
