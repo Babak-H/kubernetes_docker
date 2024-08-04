@@ -102,3 +102,7 @@ webhooks:
     admissionReviewVersions: ["v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
+
+# kubectl apply -f pod-with-conflict.yaml
+# Error from server: error when creating "pod-with-conflict.yaml": admission webhook "webhook-server webhook-demo.svc" denied the request: 
+# runAsNonRoot specified, but runAsUser set to 0 (the root user)
