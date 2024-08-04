@@ -1,0 +1,65 @@
+# this is required when the docker image is inside a private repository and we need to pull it from there (which requires authentication with the dockerhub,...)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+  labels:
+    app: my-app
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      # user/pass for private image repo
+      imagePullSecrets:
+        - name: my-registery-key
+      containers:
+        - name: my-app
+          # full address of the container
+          image: <REPOSITORYADDRESS/IMAGE-NAME:IMAGE_VERSION>
+          # even if we have the image locally, always pull from the remote image registery
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app
+spec:
+  type: ClusterIP
+  selector:
+    app: my-app
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+
+# docker-secret.yml
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-registery-key
+data:
+  type: kubernetes.io/dockerconfigjson
+  .dockerconfigjson: <BASE64-ENCODED-OF-.DOCKER/CONFIG.JSON-FILE>
+
+
+# we get image from aws ecr
+# aws ecr get-login
+# docker login -u AWS -p PASSWORDS123 <ADDRESS-OF-PRIVATE-REPO>
+
+# inside the ECR go to .docker folder and find the file config.json we have "credStore" value
+# encode the file, so we can use it in docker-secret file
+
+# cat .docker/config.json | base64
+# k apply -f docker-secret.yml
+# k get secret
