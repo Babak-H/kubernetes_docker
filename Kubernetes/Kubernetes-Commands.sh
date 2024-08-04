@@ -1,4 +1,4 @@
-##### Installations #####
+##### Installations ##########################################################################
 
 # install homebrew (brew) on macOs
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -66,7 +66,7 @@ git clone https://github.com/kodekloudhub/kubernetes-metrics-server.git
 cd kubernetes-metrics-server/
 kubectl create -f .
 
-##### Shortcuts #####
+##### Shortcuts ##########################################################################
 
 alias k=kubectl
 export ns=default
@@ -108,7 +108,7 @@ k get all -A
 k get all | grep AppName
 k get all | grep mongodb
 
-##### POD #####
+##### POD ##########################################################################
 
 # show all pods
 k get pod
@@ -276,7 +276,7 @@ k get events -o json | grep -i liveness
 k run busybox --image=busybox --command -- /bin/sh -c 'i=0; while true; do echo "$i: $(date)"; i=$((i+1)); sleep 1; done'
 k logs busybox # to see the results of the command
 
-##### ReplicaSet #####
+##### ReplicaSet ##########################################################################
 
 k get replicaset new-replicaset -o wide
 
@@ -293,7 +293,7 @@ k get rs
 k describe rs rs-d23423
 k edit rs rs-d23423 # correct the image name
 
-##### Deployment #####
+##### Deployment ##########################################################################
 
 # show all deployments
 k get deploy
@@ -361,7 +361,7 @@ k expose deploy foo --port 6262 --target-port 8080
 # copy file from pod/deployment to local machine
 k cp default/postgresl-deploy:/home/backup/db ./Desktop/mydb1.dmp
 
-##### Service #####
+##### Service ##########################################################################
 
 k get service
 k get svc
@@ -394,7 +394,7 @@ k get endpoints
 # this will shows the target port
 k describe svc back-end
 
-##### ConfigMap / Secret #####
+##### ConfigMap / Secret ##########################################################################
 
 k apply -f config-file.yaml
 
@@ -445,7 +445,7 @@ cat config.env
 
 k create cm my-cm --from-env-file=config.env
 
-##### NameSpace #####
+##### NameSpace ##########################################################################
 
 # get all the available namespaces
 k get namespace
@@ -465,7 +465,7 @@ k config current-context
 k config set-context $(k config current-context) -n dev
 k get ns
 
-##### ServiceAccount #####
+##### ServiceAccount ##########################################################################
 
 k create serviceaccount NAME
 k create sa NAME
@@ -483,14 +483,14 @@ k config view sa
 # create a new SA called tiller in kube-system namespace
 k create serviceaccount -n kube-system tiller
 
-##### metrics-server #####
+##### metrics-server ##########################################################################
 
 # shows how much memory/cpu each node is using
 k top node
 # shows how much memory/cpu each pod is using
 k top pod
 
-##### Ingress #####
+##### Ingress ##########################################################################
 
 # how to see if the ingress controller is installed
 k get ingress -n dashboard-ingress
@@ -511,7 +511,12 @@ kubectl get pod -n kube-system | grep ingress
 k create ingress ingress-test --rule="wear.my-online-store.com/wear*=wear-service:80" 
 k create ingress ingress-test --rule="wear.my-online-store.com/wear*=wear-service:80" --dry-run=client -o yaml > my-ingress.yaml
 
-##### HPA Horizontal Pod Autoscaler #####
+# create ingress for service "my-video-service" to be available from "http://ckad-mock-exam-solution.com:30093/video"
+# 30093 is port on Ingress NOT on service
+k get svc # get port on the service
+k create ingress ingress-service --rule="ckad-mock-exam-solution.com/video*=my-video-service:8080" --dry-run=client -o yaml > ingress.yaml
+
+##### HPA Horizontal Pod Autoscaler ##########################################################################
 
 k apply -f my-hpa.yaml
 
@@ -528,7 +533,7 @@ k get hpa nginx
 
 k autoscale deploy php-apache --cpu-percentage=50 --min=1 --max=10
 
-##### PV and PVC ######
+##### PV and PVC ##########################################################################
 
 k get pv
 k get pvc
@@ -545,7 +550,7 @@ k describe pvc local-pvc
 kubectl get pvc -n 105250-core-vault | grep prometheus-postgres
 kubectl delete pvc -n 105250-core-vault prometheus-postgres-db-prometheus-postgres-{0..2}
 
-##### Rolling Updates #####
+##### Rolling Updates ##########################################################################
 
 # get the progress of the update status
 k rollout status deploy ngnix-depl
@@ -585,7 +590,7 @@ k rollout history deploy nginx --revision=1
 k rollout undo deploy my-test-deploy
 k rollout undo deploy nginx --to-revision=2
 
-##### Roles and RoleBindings #####
+##### Roles and RoleBindings ##########################################################################
 
 k get role
 k get rolebinding
@@ -611,7 +616,7 @@ k get clusterRoleBinding --no-header | wc -l
 # you can see subject of this rolebinding is system:bootstrappers:kubeadm
 k describe rolebinding kube-proxy -n kube-system
 
-##### Job #####
+##### Job ##########################################################################
 
 k get job
 
@@ -642,7 +647,7 @@ k create job --from=cronjob/sample-cron-job sample-job
 # Create a cron job with image busybox that runs on a schedule of "*/1 * * * *" and writes 'date; echo Hello from the Kubernetes cluster'
 k create cronjob busybox --image=busybox --schedule="*/1 * * * *" -- /bin/sh -c 'date; echo Hello from the Kubernetes cluster'
 
-#### StatefulSet ####
+#### StatefulSet ##########################################################################
 
 # install StatefulSet via helm chart Operator
 helm install prometheus stable/prometheus-operator
@@ -756,3 +761,153 @@ vi kube-apiserver.yaml
 
 # get info about specific section of a yaml object
 kubectl explain cronjob.spec.jobTemplate --recursive
+
+##### HELM ##########################################################################
+
+# shows name of operating system
+cat /etc/*release*
+
+# retrieve helm client environment information
+helm env
+helm version
+# helm verbose output
+helm --debug
+
+# search for a helm chart
+helm search KEYWORD
+
+# search the helm hub for a chart
+helm search hub wordpress
+
+# add the bitnami repository, each repository is an alternative to helm hub
+helm repo add bitnami https://charts.bitnami.com/bitnami
+# search for a chart inside the bitnami repo
+helm search repo wordpress
+
+# see list of all added repos
+helm repo list
+
+# install a helm chart
+helm install <local-name> <repo>/<chart-name>
+
+# each chart can be installed with different names several times
+helm install release-1 bitnami/wordpress
+helm install release-2 bitnami/wordpress
+
+helm install bravo bitnami/drupal
+
+# download and install a chart separately
+helm pull --untar bitnami/wordpress
+# ./wordpress => where the chart files are located at
+helm install release-3 ./wordpress
+
+helm pull --untar bitnami/apache
+
+# download chart from local directory
+helm pull prom-repo/kube-prometheus-stack
+
+# list of all installed charts
+helm list
+# find pending helm charts in all environments
+helm list --pending -A
+
+# delete a installed chart
+helm uninstall <chart-local-name>
+helm uninstall release-1
+helm uninstall bravo
+
+# replace the existing values.yaml file inside the installed chart with this
+helm install --values=my-values.yaml release-1
+
+# install chart with custom values "myvalues.yaml" with local name "myredis", the chart files are downloaded at location "./redis"
+helm install -f myvalues.yaml myredis ./redis
+
+# install a chart by default values, but change a specific one 
+# "version" is a variable at values.yaml file
+helm install my-chart ./chart --set version=2.0.0
+
+# save helm values in yaml file to use them later
+helm show values prom-repo/kube-prometheus-stack > values.yaml
+
+# Write the contents of the values.yaml file of the bitnami/node chart to standard output
+helm show values bitnami/node
+
+# Install the bitnami/node chart setting the number of replicas to 5
+helm show values bitnami/node | grep -i replica # replicaCount: 1
+helm install mynode bitnami/node --set replicaCount=5
+
+# how to update helm charts
+helm upgrade release-1
+
+# apply changes after updating values.yml file
+helm upgrade monitoring prom-repo/kub-promethues-stack -- values=values.yaml
+
+# create a Chart from local provided file
+helm create myChart
+
+# this will inject the values into the chart to make sure that it works correctly
+helm template -f values/test-values.yml myChart
+
+# checks the yaml file's syntax for both values file and helm template files
+helm lint -f values/test-values.yml myChart
+
+# install our helm template:
+helm install -f values/alpha.yml chart_name given_name
+
+# install the chart into the cluster, this should be done for each chart that wants to be added into the cluster based on the chart
+helm install -f values/test-values.yml release-chart myChart
+
+# same as above, but this one injects values to kubernetes cluster temporarily to make sure it works fine
+helm install --dry-run -f values/test-values.yml myChart
+
+helm upgrade -f myvalues.yaml -f override.yaml redis ./redis
+
+## HelmFile
+
+# install helmfile tool, this is a plugin for Helm, allows installing several instances of the chart at once
+brew install helmfile
+
+# deploy helm charts via helmfile
+helmfile sync
+
+# shows all the applied charts
+helmfile list
+
+# delete all the service
+helmfile destroy
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
