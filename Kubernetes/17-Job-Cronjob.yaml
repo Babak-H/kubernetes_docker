@@ -18,6 +18,9 @@ metadata:
 spec:
   completions: 3  # we need 3 successful operations before job is finished
   parallelism: 2 # how many jobs to run at same time, default is 1
+  # This is so the job does not quit before it succeeds (for at least 25 tries)
+  backoffLimit: 25
+  activeDeadlineSeconds: 20 # if the task is not complete in 20sec the job should fail and pod terminate
   # this section is same as Pod
   template:
     spec:
@@ -83,3 +86,116 @@ spec:
       restartPolicy: Never
 
 # k get job whalesay
+
+
+# CronJob
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: reporting-cron-job
+spec:
+  # all cronJobs should have a schedule to run
+  schedule: "*/1 * * *"
+  # this section is same as Job
+  jobTemplate:
+    spec:
+      completions: 3
+      parallelism: 3
+      template:
+        spec:
+          containers:
+            - name: reporting-tool
+              image: reporting-tool
+          restartPolicy: Never
+
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: throw-dice-cron-job
+spec:
+  schedule: "30 21 * * *"
+  jobTemplate:
+    spec:
+      completions: 3
+      parallelism: 3
+      backoffLimit: 10
+      template:
+        spec:
+          containers:
+            - name: throw-twice
+              image: kodekloud/throw-dice
+          restartPolicy: Never
+
+# k get cj
+# k get cronjob
+
+
+# Create a job named pi with image perl:5.34 that runs the command with arguments "perl -Mbignum=bpi -wle 'print bpi(2000)'"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pi
+spec:
+  template:
+    spec:
+      containers:
+        - name: pi
+          image: perl:5.34
+          command: ["perl", "-Mbignum=bpi", "-wl", "print bpi(2000)"]
+      restartPolicy: Never
+
+# how to get job's results in logs
+# k logs job/pi
+
+
+# Create a job with the image busybox that executes the command 'echo hello;sleep 30;echo world'
+# when running "echo", we need to put "/bin/sh -c" behind the "echo" command
+# k create job busyjob --image=busybox -- /bin/sh -c 'echo hello;sleep 30;echo world'
+
+# Create a job but ensure that it will be automatically terminated by kubernetes if it takes more than 30 seconds to execute
+# k create job busyjob --image=busybox --dry-run=client -o yaml -- /bin/sh -c 'while true; do echo hello; sleep 10;done' > job.yaml
+# vi job.yaml
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: busyjob
+spec:
+  template:
+    spec:
+      # add this line here:
+      activeDeadlineSeconds: 30  # it will be automatically terminated by kubernetes if it takes more than 30 seconds to execute
+      containers:
+        - name: busybox
+          image: busybox
+          command: ["/bin/sh", "-c", "while true; do echo hello; sleep 10;done"]
+      restartPolicy: Never
+
+
+# Create a cron job with image busybox that runs every minute and writes 'date; echo Hello from the Kubernetes cluster' to standard output. The cron job should be terminated if it takes more than 17 seconds "to start execution" after its scheduled time
+# The cron job also should be terminated if it successfully starts but takes more than 12 seconds to complete execution.
+# k create cronjob busybox --image=busybox --schedule="* * * * *" --dry-run=client -o yaml -- /bin/sh -c 'date; echo Hello from the Kubernetes cluster' > cron.yaml
+# vi cron.yaml
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: busybox
+spec:
+  schedule: '*/1 * * * *'
+  startingDeadlineSeconds: 17  # cron job should be terminated if it takes more than 17 seconds "to start execution" after its scheduled time
+  jobTemplate:
+    metadata:
+      name: busybox
+    spec:
+      activeDeadlineSeconds: 12 ###
+      template:
+        spec:
+          containers:
+            - command: ["/bin/sh", "-c", "date; echo Hello from the Kubernetes cluster"]
+              image: busybox
+              name: busybox
