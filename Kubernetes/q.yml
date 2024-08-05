@@ -1,0 +1,923 @@
+# create a pod that wil start at predetermined time and which runs to completion only once => CronJob
+
+# k create cronjob hello --image=busybox --schedule="*/1 * * * *" --dry-run=client -o yaml -- date > j.yaml
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hello
+spec:
+  jobTemplate:
+    metadata:
+      name: hello
+    spec:
+      template:
+        metadata:
+        spec:
+          # ends in 22 seconds
+          activeDeadlineSeconds: 22
+          containers:
+          - command:
+            - date
+            image: busybox
+            name: hello
+          restartPolicy: OnFailure
+  schedule: '*/1 * * * *'
+
+# k get cronjob => make sure it has been created
+# k get job => make sure it is completed
+#=============================================================================================
+
+# k run nginx-resources --image=nginx --dry-run=client -o yaml > pod.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: nginx-resources
+  name: nginx-resources
+spec:
+  containers:
+  - image: nginx
+    name: nginx-resources
+    #####
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+
+#=============================================================================================
+
+# The pod for the Deployment named nosql in the craytisn namespace fails to start because its container runs out of resources.
+# Update the nosql Deployment so that the Pod:
+# 1) Request 160M of memory for its Container
+# 2) Limits the memory to half the maximum memory constraint set for the crayfish namespace
+
+# k describe ns crayfish  # we can see the resourcequota and LimitRange in here for the namespace
+# vi nosql.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nosql
+  namespace: crayfish
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: nosql
+  template:
+    metadata:
+      labels:
+        name: nosql
+    spec:
+      containers:
+        - image: mongo:4.2
+          name: mongo
+          ports:
+            - containerPort: 2701
+          resources:
+            requests:
+              memory: 160Mi
+            limits:
+              memory: 320Mi
+
+
+#===================================================================================
+# k create cm another-config --from-literal=key4=value3
+# k run nginx-configmap --image=nginx --dry-run=client -o yaml > pod.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: nginx-configmap
+  name: nginx-configmap
+spec:
+  ###
+  volumes:
+    - name: config-vol
+      configMap:
+        name: another-config
+  containers:
+  - image: nginx
+    name: nginx-configmap
+    #####
+    volumeMounts:
+      - name: config-vol
+        mountPath: /also/a/path 
+
+# k describe cm another-config
+# k get pod nginx-configmap -o yaml
+
+# configmap from file
+k -n moon create configmap configmap-web-moon-html --from-file=index.html=/opt/course/15/web-moon.html
+#=============================================================================================
+
+# a deployment in production namespace needs to run as specific serviceAccount
+# k get sa -n production
+# k set serviceaccount deploy app-a restrictedservice -n production
+# or
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-dashboard
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      name: web-dashboard
+  template:
+    metadata:
+      labels:
+        name: web-dashboard
+    spec:
+      # add the custom serviceAccount in spec.template.spec.serviceAccountName
+      serviceAccountName: dashbaord-sa  
+      containers:
+        - image: gcr.io/kodekloud/customimage/my-kubernetes-dashboard
+          name: web-dashboard
+#=============================================================================================
+
+# k create deploy backend-deployment --image=nginx --replicas=4 --port=8081 --dry-run=client -o yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: backend-deployment
+  name: backend-deployment
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: backend-deployment
+  template:
+    metadata:
+      labels:
+        app: backend-deployment
+    spec:
+      containers:
+      - image: nginx
+        name: nginx
+        #######
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 8
+          periodSeconds: 5
+        ports:
+        - containerPort: 8081
+
+#=============================================================================================
+
+# k run cache --image=Ifccncf/redis:3.2 --port=6379 -n web
+
+#=============================================================================================
+# k create secret generic another-secret --from-literal=key1=value4
+# k run nginx-secret --image=nginx --dry-run=client -o yaml > pod.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: nginx-secret
+  name: nginx-secret
+spec:
+  containers:
+  - image: nginx
+    name: nginx-secret
+    env:
+      ######
+      - name: COOL_VARIABLE
+        valueFrom:
+          secretKeyRef: 
+            name: another-secret
+            key: key1
+
+# how to save a secret as volume
+---
+volumes:
+- name: secret2-volume              # add
+  secret:                           # add
+    secretName: secret2  
+
+---
+envFrom:
+  - secretRef:        # also works for configMapRef
+      name: secret1
+#=============================================================================================
+# pod already exists, The application has an endpoint, /started, that will indicate if it can accept traffic by returning an HTTP 200. If the endpoint returns an HTTP 500, the application has not yet finished initialization
+# application has another endpoint /healthz that will indicate if the application is still working as expected by returning an HTTP 200. If the endpoint returns an HTTP 500 the application is no longer responsive
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: pod
+  name: pod
+spec:
+  containers:
+  - args:
+    - probe-pod
+    image: nginx
+    name: pod
+    readinessProbe:
+      httpGet:
+        path: "/started"
+        port: 8080
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: 8080
+
+#=============================================================================================
+
+# run the pod using the given yaml file, get all available logs and svae them to the given file
+
+# k apply -f /opt/KDOB00201/counter.yaml
+# k get po
+# k logs counter
+# k logs -f counter > /opt/KDOB0020l/log_Output.txt
+# cat /opt/KDOB0020l/log_Output.txt
+
+# -From the pods running in namespace cpu-stress , write the name only of the pod that is consuming the most CPU to file /opt/KDOBG030l/pod.txt, which has already been created
+# k top pods -n cpu-stress
+# echo "max-load-98" > /opt/KDOBG030l/pod.txt
+
+#=============================================================================================
+
+# k run pod1 --image=Ifccncf/arg-output --dry-run=client -o yaml -- -lines 56 -F > /opt/KDPD00101/podl.yml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: pod1
+  name: pod1
+spec:
+  containers:
+  - command:
+    - -lines
+    - "56"
+    - -F
+    image: Ifccncf/arg-output
+    name: app1cont
+
+# k get po
+# k get po pod1 -o json > /opt/KDPD00101/out1.json
+
+#=============================================================================================
+# k create deploy -n kdpd00201 frontend --replicas=4 --image=lfccncf/nginx:1.13.7 --port=8080 --dry-run=client -o yaml > deploy.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: frontend
+  name: frontend
+  namespace: kdpd00201
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - image: lfccncf/nginx:1.13.7
+        name: nginx
+        ports:
+        - containerPort: 8080
+        ####
+        env:
+          - name: NGINX__PORT
+            value: "8080"
+
+#=============================================================================================
+# Update the app deployment in the kdpd00202 namespace with a maxSurge of 5% and a maxUnavailable of 2%
+# Perform a rolling update of the web1 deployment, changing the Ifccncf/ngmx image version to 1.13
+# Roll back the app deployment to the previous version
+
+# k edit deploy nginx-deployment
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+ name: nginx-deployment
+ namespace: kdpd00202 
+ labels:
+   app: nginx
+spec:
+ replicas: 3
+ selector:
+   matchLabels:
+     app: nginx
+ template:
+   metadata:
+     labels:
+       app: nginx
+   spec:
+     containers:
+     - name: nginx
+       ####
+       image: Ifccncf/ngmx:1.13
+       ports:
+       - containerPort: 80
+ #######
+ strategy:
+   type: RollingUpdate
+   rollingUpdate:
+     maxSurge: 5%
+     maxUnavailable: 2%
+
+# k rollout status deploy nginx-deployment -n kdpd00202  # wait for all pods to be updated
+# k rollout undo deploy nginx-deployment -n kdpd00202
+
+# k rollout status deploy nginx-deployment -n kdpd00202
+# or
+# k rollout history deploy nginx-deployment -n kdpd00202
+
+
+#=============================================================================================
+# add tag func: webFrontEnd to already existing deployment in pod template and make sure it has 5 replicas
+
+
+# k edit deploy kdsn00101-deployment -n kdsn00101
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kdsn00101-deployment
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      component: api
+  template:
+    metadata:
+      labels:
+        component: api
+        #######
+        func: webFrontEnd
+    spec:
+      containers:
+        - name: kdsn00101
+          image: fhsinchy/notes-api
+          ports:
+            - containerPort: 8080
+
+# create a nodeport service for the deployment and use newly added tag
+# k expose deploy kdsn00101-deployment -n kdsn00101 --type NodePort --port 8080 --name cherry
+# or
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cherry
+spec:
+  type: NodePort
+  selector:
+    #####
+    func: webFrontEnd
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+
+#=============================================================================================
+# Exporting built container images in OCI format.
+# A Dockerfile has been prepared at ./human-stork/build/Dockerfile
+# Using the prepared Dockerfile, build a container image with the name macaque and tag 3.0. You may install and use the tool you like
+# store the image as /human-stork/build/macaque-3.0.tar file
+
+# cd /human-stork/build/
+# sudo docker build -t macaque:3.0 .
+# sudo docker save  macaque:3.0 > ~/human-stork/build/macaque-3.0.tar
+
+
+sudo docker build -t registry.killer.sh:5000/sun-cipher:latest -t registry.killer.sh:5000/sun-cipher:v1-docker .
+sudo docker image ls
+sudo docker push registry.killer.sh:5000/sun-cipher:latest
+sudo docker push registry.killer.sh:5000/sun-cipher:v1-docker
+
+podman build -t registry.killer.sh:5000/sun-cipher:v1-podman .
+podman push registry.killer.sh:5000/sun-cipher:v1-podman
+podman run -d --name sun-cipher registry.killer.sh:5000/sun-cipher:v1-podman
+podman ps > /opt/course/containers
+podman logs sun-cipher > /opt/course/11/logs
+#=============================================================================================
+# Working with deprecated APIs.
+#
+#  kubectl convert -f givenfile.yaml --output-version=apps/v1 | kubectl apply -f
+
+# try to fix any api deprication issues in the manifest file /credible-mite/www.yaml so that the application can be deployed to the k8s cluster
+# app was created for k8s version 1.15 but current version of cluster is v1.24
+# deploy application with updated manifest to namespace cobra
+
+# k convert -f /credible-mite/www.yaml --output-version apps/v1
+# cat /credible-mite/www.yaml
+# k apply -f /credible-mite/www.yaml
+---
+apiVersion: apps/v1  ## make sure version is correct
+kind: Deployment
+metadata:
+  name: www-deployment
+  namespace: cobra  # make sure it is for correct namespace
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:stable
+        ports:
+          - containerPort: 80
+
+#=============================================================================================
+# Configuring security contexts for Pods and containers.
+
+# Modify the existing Deployment named broker-deployment running in namespace quetzal so that its containers:
+# 1) Run with user ID 30000 and
+# 2) Privilege escalation is forbidden
+# The broker-deployment is manifest file can be found at: my-deploy.yml
+
+# vi my-deploy.yaml
+# k apply -f my-deploy.yaml
+# k get pods -n quetzal
+----
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broker-deployment
+  namespace: quetzal
+  labels:
+    app: broker-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: broker-deployment
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        app: broker-deployment
+    spec:
+      containers:
+      - name: broker
+        image: redis:alpine
+        ports:
+          - containerPort: 6379
+        securityContext:
+          runAsUser: 30000
+          privilaged: false
+
+#=============================================================================================
+# Troubleshooting ingress issues.
+
+
+
+#=============================================================================================
+# NetworkPolicy to allow specific traffic.
+
+# Update the Pod ckad00018-newpod in the ckad00018 namespace to use a NetworkPolicy allowing the Pod to send and receive traffic only to and from the pods web and db
+# all required network policies have already been created, do not create or edit them!
+
+# k get networkpolicy -n ckad00018
+# k describe netpol my-current-netpol -n ckad00018  # check what tags the pod needs to send/recieve traffic from "web" and "db" pods
+
+# k label pod ckad00018-newpod -n ckad00018 web-access=true
+# k label pod ckad00018-newpod -n ckad00018 db-access=true
+
+
+# pod front-end has label id: frontend
+# pod api has label id: api
+# create a network policy that pod frontend can only send the data to pod api
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: np1
+  namespace: venus
+spec:
+  podSelector:
+    matchLabels:
+      id: frontend          # label of the pods this policy should be applied on
+  policyTypes:
+  - Egress                  # we only want to control egress
+  egress:
+  # here we did not specify any port for egress
+  - to:                     # 1st egress rule
+    - podSelector:            # allow egress only to pods with api label
+        matchLabels:
+          id: api
+  
+  # these ports are NOT under egress, they are general ports for connection
+  - ports:                  # 2nd egress rule
+    - port: 53                # allow DNS UDP
+      protocol: UDP
+    - port: 53                # allow DNS TCP
+      protocol: TCP
+
+#=============================================================================================
+# Canary deployment to distribute traffic in a 60-40 percent split.
+
+# You are asked to prepare a Canary deployment for testing a new application release.
+# A Service named krill-Service in the goshark namespace points to 5 pod created by the Deployment named current-krill-deployment
+# Create an identical Deployment named canary-krill-deployment, in the same namespace.
+# 2) Modify the Deployment so that:
+# -A maximum number of 10 pods run in the goshark namespace.
+# -40% of the krill-service 's traffic goes to the canary-krill-deployment pod(s)
+
+# service
+---
+apiVersion: v1
+kind: Service
+metadata: 
+  name: krill-Service
+  namespace: goshark
+spec:
+  selector:
+    app: krill-deployment
+type: NodePort
+ports:
+  - port: 8080
+    nodePort: 30000
+
+# current-krill-deployment
+# or just run
+# k scale deploy current-krill-deployment --replicas=6 -n goshark
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: current-krill-deployment
+  namespace: goshark
+  labels:
+    app: krill-deployment
+spec:
+  replicas: 6  # change from 5 to 6
+  selector:
+    matchLabels:
+      app: krill-deployment
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        version: v1 ####
+        app: krill-deployment
+    spec:
+      containers:
+      - name: krill-deployment
+        image: nginx
+
+# canary-krill-deployment
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: canary-krill-deployment
+  namespace: goshark
+  labels:
+    app: krill-deployment
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: krill-deployment
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        version: v2 #####
+        app: krill-deployment
+    spec:
+      containers:
+      - name: krill-deployment
+        image: nginx
+#=============================================================================================
+# daemonset
+# used when you want to run one pod on each node, such as monitoring tools for example fluentD or proxy suchs calico or prometheus-exporters
+# daemonset will create an many pods as there are nodes in cluster
+# we don't set number of replicas on daemonset as it automatically deploys a pod on each node
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluentd
+spec:
+  selector:
+    matchLabels:
+      name: fluentd
+  template:
+    metadata:
+      labels:
+        name: fluentd
+    spec:
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
+      containers:
+        - name: fluentd
+          image: fluentd:v2.5.2
+          resources:
+            limits:
+              memory: 256Mi
+              cpu: "0.25"
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
+      volumes:
+        - name: varlog
+          # daemoonset volumes use hostPath since the always run on specific node
+          hostPath:
+            path: /var/log
+
+#=============================================================================================
+# multi-container pod
+
+# a container within the poller pod is hard-coded to connect to nginxsvc service on port 90, as this port changes to 5050
+# an additional container needs to be added to the poller pod which adapts the container to connect to this new port, via ambassador container design
+
+# update the nginxsvc service to serve on port 5050
+
+# add an HAproxy container named haproxy bound to port 90 to the poller pod and deploy the enhanced pod.
+# use the image haproxy and inject the configuration located at /opt/KDMC3323423/haproxy.cfg via a configmap
+# named haproxy-config monuted to the container at /usr/local/etc/haproxy/haproxy.cfg
+
+# update the original pod to connect to localhost instead of nginxsvc
+
+# cat /opt/KDMC3323423/haproxy.cfg
+# k create cm haproxy-config --from-file=/opt/KDMC3323423/haproxy.cfg
+# k get cm cm haproxy-config
+
+# another way to do it
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: haproxy-config
+data:
+  haproxy.cfg: |
+    global
+        log stdout  format raw  local0
+
+    defaults
+        log     global
+        mode    tcp
+        timeout connect 10s
+        timeout client  1m
+        timeout server  1m
+
+    frontend http-in
+        bind *:90
+        default_backend servers
+
+    backend servers
+        server server1 nginxsvc:5050 maxconn 32
+
+
+# edit the service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginxsvc
+spec:
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 5050
+      targetPort: 5050
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: pod1
+  name: poller
+spec:
+  containers:
+  - name: poller-container
+    image: poller:stable
+    env:
+      - name: NGINX_HOST
+        value: "localhost"
+      - name: NGINX_PORT
+        value: "90"
+  - name: haproxy
+    image: haproxy
+    volumeMounts:
+      - name: haproxy-config
+        mountPath: /usr/local/etc/haproxy/haproxy.cfg
+        subPath: haproxy.cfg
+  volumes:
+    - name: haproxy-config
+      configMap:
+        name: haproxy-config
+
+# we have a container that writes log files in format A and another that converts logs to format B, create a deployment
+# that runs both containers 
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multi-container-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      run: app
+  template:
+    metadata:
+      labels:
+        run: app
+    spec:
+      containers:
+      - name: web-one
+        image: busybox:1.28
+        command: ["/bin/sh", "-c", "while true; do echo 'i love cnfc' >> /tmp/log/input.log; sleep 10; done"]
+        volumeMounts:
+          - name: log-volume
+            mountPath: /tmp/log
+      - name: side-car
+        image: busybox:1.28
+        volumeMounts:
+          - name: log-volume
+            mountPath:  /tmp/log
+      volumes:
+        - name: log-volume
+          emptyDir: {}
+
+# Create a sidecar container named logger-con, image busybox:1.31.0 , which mounts the same volume and writes the content of cleaner.log to stdout, you can use the tail -f command
+# Sidecar containers in K8s are initContainers with restartPolicy: Always
+---
+initContainers:
+  - name: logger-con
+    image: busybox:1.31.0
+    restartPolicy: Always # sidecar containers should have always restart policy
+    command: ["/bin/sh", "-c", "tail -f /var/log/cleaner/cleaner.log"]
+    volumeMounts:
+      - name: logs
+        mountPath: /var/log/cleaner
+
+# you can't mount a volume to root of a container!  mountPath: /  => will fail
+#=============================================================================================
+# labels and annotations
+# Team Sunny needs to identify some of their Pods in namespace sun. They ask you to add a new label protected: true to all Pods 
+# with an existing label type: worker or type: runner. Also add an annotation protected: do not delete this pod to all Pods having 
+# the new label protected: true.
+
+k -n sun label pod -l "type in (worker,runner)" protected=true
+
+k -n sun label pod -l "type in (worker,runner)" protected=true
+
+#=============================================================================================
+
+# a pod is unreachable due to faoling livenessprobe
+# find the broken pod and store its name and namespace to file /opt/KDBOD23423/broken.txt in format namespace/pod
+# store associated error events to file /opt/KDBOD23423/error.txt
+# fix the issue
+
+# k get po -A | grep "qa|prod|dev|lab"
+# k get po -A | grep -i failed
+# echo "mynamespace/my-pod" > /opt/KDBOD23423/error.txt
+
+# k describe pod my-pod -n mynamespace | grep -i error > /opt/KDBOD23423/error.txt
+
+# based on error events we can fixed the issue, it can be image is wrong or pod doesnt have enough resources (OOM Kill) or livenessProbe not set correctly
+
+#=============================================================================================
+
+# a deployment is failing on the cluster die to an incorrect image being used, locate the deployment and fix the problem
+
+# k get deploy  # this might NOT show that why deployment is failing
+# k get po 
+
+# k edit deploy my-ngnix-deployment 
+# # change the image to correct value
+
+# k get po
+#=============================================================================================
+# helm
+
+# Delete release internal-issue-report-apiv1
+helm -n mercury uninstall internal-issue-report-apiv1
+
+# Upgrade release internal-issue-report-apiv2 to any newer version of chart bitnami/nginx available
+helm -n mercury upgrade internal-issue-report-apiv2 bitnami/nginx
+
+# Install a new release internal-issue-report-apache of chart bitnami/apache. The Deployment should have two replicas, set these via Helm-values during install
+helm show values bitnami/apache | grep -i count
+helm -n mercury install internal-issue-report-apache bitnami/apache --set replicaCount=2
+
+# There seems to be a broken release, stuck in pending-install state. Find it and delete it
+# By default releases in pending-upgrade state aren't listed, but we can show all to find and delete the broken release
+helm -n mercury ls -a
+helm -n mercury uninstall internal-issue-report-daniel
+#=============================================================================================
+
+# get specific label or annotation from a pod from a list of pods
+k -n saturn describe pod | grep -i my-happy-shop
+k -n saturn get pod -o yaml | grep -i my-happy-shop
+
+# when you have a list of rollouts and current one isn't working, only way to go back to a working one is to go back one by one to see which one worked before
+
+how to test a working service from a temporary pod
+
+find the service endpoint
+k -n pluto describe svc project-plt-svc | grep -i endpoints
+k run temp --image=nginx:alpine -- curl http://project-plt-svc:3333
+
+
+# how to test curl on a pod without svc
+k get po -o wide # get pod's ip address
+k run temp --image=nginx:alpine -- curl 10.44.0.78
+k logs temp
+#=============================================================================================
+
+# PV doesn't have a namespace
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: earth-project-earthflower-pv
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /Volumes/Data
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: earth-project-earthflower-pvc
+  namespace: earth
+spec:
+  resources:
+    requests:
+      storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: project-earthflower
+  namespace: earth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: project-earthflower
+  template:
+    metadata:
+      labels:
+        app: project-earthflower
+    spec:
+      volumes:
+        - name: my-vol
+          persistentVolumeClaim:
+            claimName: earth-project-earthflower-pvc
+      containers:
+      - image: httpd:2.4.41-alpine
+        name: container
+        volumeMounts:
+          - name: my-vol
+            mountPath: /tmp/project-data
+
+# to get pvc events 
+k -n earth describe pvc earth-project-earthflower-pvc # Event section is at end
+# manually copy it to file /opt/course/13/pvc-126-reason
+
+#=============================================================================================
+
+# This claim should use a new StorageClass moon-retain with the provisioner set to moon-retainer and the reclaimPolicy set to Retain
+# storageclass doesnt have a namespace
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: moon-retain
+provisioner: moon-retainer
+reclaimPolicy: Retain
+
