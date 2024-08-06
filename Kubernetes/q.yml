@@ -1,44 +1,6 @@
 # Troubleshooting ingress issues.
 
 #=============================================================================================
-# daemonset
-# used when you want to run one pod on each node, such as monitoring tools for example fluentD or proxy suchs calico or prometheus-exporters
-# daemonset will create an many pods as there are nodes in cluster
-# we don't set number of replicas on daemonset as it automatically deploys a pod on each node
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: fluentd
-spec:
-  selector:
-    matchLabels:
-      name: fluentd
-  template:
-    metadata:
-      labels:
-        name: fluentd
-    spec:
-      tolerations:
-        - effect: NoSchedule
-          operator: Exists
-      containers:
-        - name: fluentd
-          image: fluentd:v2.5.2
-          resources:
-            limits:
-              memory: 256Mi
-              cpu: "0.25"
-          volumeMounts:
-            - name: varlog
-              mountPath: /var/log
-      volumes:
-        - name: varlog
-          # daemoonset volumes use hostPath since the always run on specific node
-          hostPath:
-            path: /var/log
-
-#=============================================================================================
 # multi-container pod
 
 # a container within the poller pod is hard-coded to connect to nginxsvc service on port 90, as this port changes to 5050
@@ -122,79 +84,7 @@ spec:
     - name: haproxy-config
       configMap:
         name: haproxy-config
-
-# we have a container that writes log files in format A and another that converts logs to format B, create a deployment
-# that runs both containers 
-
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: multi-container-app
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      run: app
-  template:
-    metadata:
-      labels:
-        run: app
-    spec:
-      containers:
-      - name: web-one
-        image: busybox:1.28
-        command: ["/bin/sh", "-c", "while true; do echo 'i love cnfc' >> /tmp/log/input.log; sleep 10; done"]
-        volumeMounts:
-          - name: log-volume
-            mountPath: /tmp/log
-      - name: side-car
-        image: busybox:1.28
-        volumeMounts:
-          - name: log-volume
-            mountPath:  /tmp/log
-      volumes:
-        - name: log-volume
-          emptyDir: {}
-
-# Create a sidecar container named logger-con, image busybox:1.31.0 , which mounts the same volume and writes the content of cleaner.log to stdout, you can use the tail -f command
-# Sidecar containers in K8s are initContainers with restartPolicy: Always
----
-initContainers:
-  - name: logger-con
-    image: busybox:1.31.0
-    restartPolicy: Always # sidecar containers should have always restart policy
-    command: ["/bin/sh", "-c", "tail -f /var/log/cleaner/cleaner.log"]
-    volumeMounts:
-      - name: logs
-        mountPath: /var/log/cleaner
-
-# you can't mount a volume to root of a container!  mountPath: /  => will fail
-#=============================================================================================
-# labels and annotations
-# Team Sunny needs to identify some of their Pods in namespace sun. They ask you to add a new label protected: true to all Pods 
-# with an existing label type: worker or type: runner. Also add an annotation protected: do not delete this pod to all Pods having 
-# the new label protected: true.
-
-k -n sun label pod -l "type in (worker,runner)" protected=true
-
-k -n sun label pod -l "type in (worker,runner)" protected=true
-
-#=============================================================================================
-
-# a pod is unreachable due to faoling livenessprobe
-# find the broken pod and store its name and namespace to file /opt/KDBOD23423/broken.txt in format namespace/pod
-# store associated error events to file /opt/KDBOD23423/error.txt
-# fix the issue
-
-# k get po -A | grep "qa|prod|dev|lab"
-# k get po -A | grep -i failed
-# echo "mynamespace/my-pod" > /opt/KDBOD23423/error.txt
-
-# k describe pod my-pod -n mynamespace | grep -i error > /opt/KDBOD23423/error.txt
-
-# based on error events we can fixed the issue, it can be image is wrong or pod doesnt have enough resources (OOM Kill) or livenessProbe not set correctly
-
+        
 #=============================================================================================
 
 # a deployment is failing on the cluster die to an incorrect image being used, locate the deployment and fix the problem
