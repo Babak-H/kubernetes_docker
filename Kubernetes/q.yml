@@ -1,8 +1,3 @@
-# Troubleshooting ingress issues.
-
-#=============================================================================================
-# multi-container pod
-
 # a container within the poller pod is hard-coded to connect to nginxsvc service on port 90, as this port changes to 5050
 # an additional container needs to be added to the poller pod which adapts the container to connect to this new port, via ambassador container design
 
