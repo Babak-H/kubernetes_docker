@@ -43,7 +43,6 @@ data:
     backend servers
         server server1 nginxsvc:5050 maxconn 32
 
-
 # edit the service
 ---
 apiVersion: v1
@@ -57,7 +56,7 @@ spec:
     - protocol: TCP
       port: 5050
       targetPort: 5050
-
+      
 ---
 apiVersion: v1
 kind: Pod
@@ -84,122 +83,3 @@ spec:
     - name: haproxy-config
       configMap:
         name: haproxy-config
-        
-#=============================================================================================
-
-# a deployment is failing on the cluster die to an incorrect image being used, locate the deployment and fix the problem
-
-# k get deploy  # this might NOT show that why deployment is failing
-# k get po 
-
-# k edit deploy my-ngnix-deployment 
-# # change the image to correct value
-
-# k get po
-#=============================================================================================
-# helm
-
-# Delete release internal-issue-report-apiv1
-helm -n mercury uninstall internal-issue-report-apiv1
-
-# Upgrade release internal-issue-report-apiv2 to any newer version of chart bitnami/nginx available
-helm -n mercury upgrade internal-issue-report-apiv2 bitnami/nginx
-
-# Install a new release internal-issue-report-apache of chart bitnami/apache. The Deployment should have two replicas, set these via Helm-values during install
-helm show values bitnami/apache | grep -i count
-helm -n mercury install internal-issue-report-apache bitnami/apache --set replicaCount=2
-
-# There seems to be a broken release, stuck in pending-install state. Find it and delete it
-# By default releases in pending-upgrade state aren't listed, but we can show all to find and delete the broken release
-helm -n mercury ls -a
-helm -n mercury uninstall internal-issue-report-daniel
-#=============================================================================================
-
-# get specific label or annotation from a pod from a list of pods
-k -n saturn describe pod | grep -i my-happy-shop
-k -n saturn get pod -o yaml | grep -i my-happy-shop
-
-# when you have a list of rollouts and current one isn't working, only way to go back to a working one is to go back one by one to see which one worked before
-
-how to test a working service from a temporary pod
-
-find the service endpoint
-k -n pluto describe svc project-plt-svc | grep -i endpoints
-k run temp --image=nginx:alpine -- curl http://project-plt-svc:3333
-
-
-# how to test curl on a pod without svc
-k get po -o wide # get pod's ip address
-k run temp --image=nginx:alpine -- curl 10.44.0.78
-k logs temp
-#=============================================================================================
-
-# PV doesn't have a namespace
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: earth-project-earthflower-pv
-spec:
-  capacity:
-    storage: 2Gi
-  accessModes:
-    - ReadWriteOnce
-  hostPath:
-    path: /Volumes/Data
-
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: earth-project-earthflower-pvc
-  namespace: earth
-spec:
-  resources:
-    requests:
-      storage: 2Gi
-  accessModes:
-    - ReadWriteOnce
-
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: project-earthflower
-  namespace: earth
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: project-earthflower
-  template:
-    metadata:
-      labels:
-        app: project-earthflower
-    spec:
-      volumes:
-        - name: my-vol
-          persistentVolumeClaim:
-            claimName: earth-project-earthflower-pvc
-      containers:
-      - image: httpd:2.4.41-alpine
-        name: container
-        volumeMounts:
-          - name: my-vol
-            mountPath: /tmp/project-data
-
-# to get pvc events 
-k -n earth describe pvc earth-project-earthflower-pvc # Event section is at end
-# manually copy it to file /opt/course/13/pvc-126-reason
-
-#=============================================================================================
-
-# This claim should use a new StorageClass moon-retain with the provisioner set to moon-retainer and the reclaimPolicy set to Retain
-# storageclass doesnt have a namespace
----
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: moon-retain
-provisioner: moon-retainer
-reclaimPolicy: Retain
