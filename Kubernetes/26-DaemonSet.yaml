@@ -1,0 +1,37 @@
+# daemonset
+# used when you want to run one pod on each node, such as monitoring tools for example fluentD or proxy suchs calico or prometheus-exporters
+# daemonset will create an many pods as there are nodes in cluster
+# we don't set number of replicas on daemonset as it automatically deploys a pod on each node
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluentd
+spec:
+  selector:
+    matchLabels:
+      name: fluentd
+  template:
+    metadata:
+      labels:
+        name: fluentd
+    spec:
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
+      containers:
+        - name: fluentd
+          image: fluentd:v2.5.2
+          resources:
+            limits:
+              memory: 256Mi
+              cpu: "0.25"
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
+      volumes:
+        - name: varlog
+          # daemoonset volumes use hostPath since the always run on specific node
+          hostPath:
+            path: /var/log
+            
