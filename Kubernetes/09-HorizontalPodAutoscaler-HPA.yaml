@@ -3,7 +3,7 @@
 apiVersion: autoscaling/v1
 kind: HorizontalPodAutoscaler
 metadata:
-  name: api-gateway-hpa
+  name: api-gateway
 spec:
   # max number of pods allowed for deployment
   maxReplicas: 4
@@ -61,7 +61,7 @@ spec:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: php-apache-HPA
+  name: php-apache
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -77,3 +77,25 @@ spec:
         target:
           type: Utilization
           averageUtilization: 50
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: eclipse  # the HPA usaually have same name as the deployment its affecting
+  namespace: xx1
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: eclipse
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 65
+        
