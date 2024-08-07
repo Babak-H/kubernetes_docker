@@ -291,6 +291,10 @@ k get events -o json | grep -i liveness
 k run busybox --image=busybox --command -- /bin/sh -c 'i=0; while true; do echo "$i: $(date)"; i=$((i+1)); sleep 1; done'
 k logs busybox # to see the results of the command
 
+# this will cause the pod to crashloop backoff
+k run busybox --image=busybox --command -- /bin/sh -c echo "hello"
+# but this will work, after -C we need "" or ''
+k run busybox1 --image=busybox --command -- /bin/sh -c 'echo "hello"'
 ##### ReplicaSet ##########################################################################
 
 k get replicaset new-replicaset -o wide
