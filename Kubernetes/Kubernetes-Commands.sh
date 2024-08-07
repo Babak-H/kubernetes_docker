@@ -131,6 +131,9 @@ k replace -f pod.yaml --force  # instead of deleting and recreating, replace the
 # this will replace the pod that you wanted to edit
 kubectl replace -f /tmp/kubectl-edit-XXXXX.yaml --force
 
+# find all the pods that have labels red or orange or blue, and only show their "Name" volumn
+k get po -n rep -l "color in (red,orange,blue)" -o wide | grep -v Name | awk '{print $1}' > /home/ubuntu/pod001
+
 # --dry-run: By default, as soon as the command is run, the resource will be created. If you simply want to test your command, use the --dry-run option. This will not create the resource. Instead, tell you whether the resource can be created and if your command is right.
 # -o yaml: This will output the resource definition in YAML format on the screen.
 
@@ -159,6 +162,9 @@ k logs e-com-1123 -n e-commerce > /opt/output/e-com.log
 # reach a service from within another pod in cluster
 k run busybox --image=busybox --command -- wget -qO my-app-svc
 k logs busybox  # the downloaded html from nginx deployments should be visible
+
+# get how many lines we have in the logs combined for all the pods that have the tag "app=prod"
+k logs -n ca2 -l app=prod | wc -l  > /home/ubuntu/res.txt 
 
 # show details of a running pod
 k describe pod PodName
@@ -195,6 +201,8 @@ k run messaging --image=redis:alpine -l tier=msg
 k run busybox --image=busybox -- env
 k run busybox --image=busybox --dry-run=client -o yaml --command env > pod.yaml
 k run busybox --image=busybox --dry-run=client -o yaml --command -- /bin/sh -c 'echo hello; sleep 3600' > pod.yaml
+
+k run client -n skynet --image=appropriate/curl --restart=Never -it --rm -- curl http://t2-svc:8080 > /home/ubuntu/svc-output.txt
 
 k edit pod PodName
 
@@ -257,6 +265,8 @@ k get pod --selector=app=v2
 
 # Add a new label tier=web to all pods having 'app=v2' or 'app=v1' labels
 k label pod -l "app in (v1,v2)" tier=web
+# add app=cloudacademy label to all pods that have the label env=prod
+k label po -n gzz -l "env=prod" app=cloudacademy
 
 # how to choose a pod via -l, based on its labels
 k get pods --selector app=App1
@@ -331,6 +341,8 @@ k delete -f nginx-deployment.yaml
 # update image container of a deployment
 k set image <resource-type>/<resource-name> <container-name>=<image-name-with-tag>
 k set image deployment/client-deployment client=fhsinchy/notes-client:edge
+
+k set image deploy cloudforce -n fre nginx=nginx:1.19.0-perl --record
 
 k scale deploy nginx --replicas=5
 
@@ -537,6 +549,8 @@ k autoscale deploy nginx --cpu-percentage=80 --min=5 --max=10
 k get hpa nginx
 
 k autoscale deploy php-apache --cpu-percentage=50 --min=1 --max=10
+
+k -n xx1 autoscale deploy eclipse --min=2 --max=4  --cpu-percentage=65
 
 ##### PV and PVC ##########################################################################
 
