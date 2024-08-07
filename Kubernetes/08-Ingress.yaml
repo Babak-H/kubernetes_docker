@@ -263,3 +263,33 @@ spec:
                 name: my-video-service
                 port:
                   number: 8080
+
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: world
+  namespace: world
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx   # k get ingressclass -n world  , in case the ingress classname is NOT default, check this
+  rules:
+  - host: world.universe.mine
+    http:
+      paths:
+      - path: /europe
+        pathType: Prefix
+        backend:
+          service:
+            name: europe
+            port:
+              number: 80
+      - path: /asia
+        pathType: Prefix
+        backend:
+          service:
+            name: asia
+            port:
+              number: 80
