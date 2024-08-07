@@ -414,3 +414,19 @@ spec:
       volumeMounts:
       - name: my-vol
         mountPath: /etc/foo
+        
+# pod with for-loop command
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: for-loop-pod
+  labels:
+    app: for-loop
+spec:
+  containers:
+  - name: for-loop-container
+    image: busybox
+    command: ["/bin/sh", "-c", "for word in 1 2 3 4 5; do echo $word; done"]
+  restartPolicy: OnFailure
+  
