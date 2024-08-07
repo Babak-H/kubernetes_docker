@@ -147,3 +147,55 @@ spec:
       hostPath:
         path: /var/log/webapp
         type: DirectoryOrCreate
+
+
+# a container within the poller pod is hard-coded to connect to nginxsvc service on port 90, as this port changes to 5050,
+# an additional container needs to be added to the poller pod which adapts the container to connect to this new port, via ambassador container design
+# add an HAproxy container named haproxy bound to port 90 to the poller pod and deploy the enhanced pod.
+# use the image haproxy and inject the configuration located at /opt/KDMC3323423/haproxy.cfg via a configmap
+# named haproxy-config monuted to the container at /usr/local/etc/haproxy/haproxy.cfg
+# update the nginxsvc service to serve on port 5050
+# update the original pod to connect to localhost instead of nginxsvc
+
+cat /opt/KDMC3323423/haproxy.cfg
+k create cm haproxy-config --from-file=/opt/KDMC3323423/haproxy.cfg
+k get cm haproxy-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginxsvc
+spec: 
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 5050
+      targetPort: 5050
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  label: pod1
+name: poller
+spec:
+  volumes:
+    - name: haproxy-config
+      configMap:
+        name: haproxy-config
+  containers:
+    - name: poller-container
+      image: poller:stable
+      env:
+        - name: NGINX_HOST
+          value: "localhost"
+        - name: NGINX_PORT
+          value: "90"
+    - name: haproxy
+      image: haproxy
+      volumeMounts:
+        - name: haproxy-config
+          mountPath: /usr/local/etc/haproxy/haproxy.cfg
+          subPath: haproxy.cfg
