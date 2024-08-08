@@ -1,4 +1,4 @@
-# create a pod that wil start at predetermined time and which runs to completion only once and run command date => CronJob
+# create a pod that will start at predetermined time and which runs to completion only once and run command "date" => CronJob
 # it should finish in 22 seconds or stop the pod
 # k create cronjob hello --image=busybox --schedule="*/1 * * * *" --dry-run=client -o yaml -- date > j.yaml
 ---
@@ -45,7 +45,7 @@ spec:
           cpu: 200m
           memory: 1Gi
 #=============================================================================================
-# The pod for the Deployment named nosql in the craytisn namespace fails to start because its container runs out of resources.
+# The pod for the Deployment named 'nosql' in the 'craytisn' namespace fails to start because its container runs out of resources.
 # Update the nosql Deployment so that the Pod:
 # 1) Request 160M of memory for its Container
 # 2) Limits the memory to half the maximum memory constraint set for the crayfish namespace
@@ -106,7 +106,7 @@ spec:
 # configmap from file
 # k -n moon create cm configmap-web-moon-html --from-file=index.html=/opt/course/15/web-moon.html
 #=============================================================================================
-# a deployment in production namespace needs to run as specific serviceAccount
+# a deployment in 'production' namespace needs to run as specific serviceAccount
 
 # k get sa -n production
 # k -n production set serviceaccount deploy app-a restrictedservice 
@@ -155,7 +155,7 @@ spec:
           name: nginx
           ports:
             - containerPort: 8081
-          # resources are for each container in a pod/deployment
+          # Probes are for each container in a pod/deployment
           readinessProbe:
             httpGet:
               path: /healthz
@@ -579,7 +579,7 @@ spec:
           image: busybox:1.28
           volumeMounts:
             - name: log-volume
-              mountPath:  /tmp/log
+              mountPath: /tmp/log
       volumes:
         - name: log-volume
           emptyDir: {}
@@ -593,8 +593,8 @@ initContainers:
     restartPolicy: Always  # sidecar containers should have always restarted policy, because we want to continue running them
     command: ["/bin/sh", "-c", "tail -f /var/log/cleaner/cleaner.log"]
     volumeMounts:
-      name: logs
-      mountPath: /var/log/cleaner
+        - name: logs
+          mountPath: /var/log/cleaner
 
 # you can't mount a volume to root of a container!  mountPath: /  => will fail
 #=============================================================================================
@@ -732,9 +732,9 @@ reclaimPolicy: Retain
 # app was created for k8s version 1.15 but current version of cluster is v1.24
 # deploy application with updated manifest to namespace cobra
 
-k convert -f /credible-mite/www.yaml --output-version=apps/v1   # this changes the same file
-cat /credible-mite/www.yaml
-k apply -f /credible-mite/www.yaml -n cobra
+# k convert -f /credible-mite/www.yaml --output-version=apps/v1   # this changes the same file
+# cat /credible-mite/www.yaml
+# k apply -f /credible-mite/www.yaml -n cobra
 
 ---
 apiVersion: apps/v1  # make sure version is correct
