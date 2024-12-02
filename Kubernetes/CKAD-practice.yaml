@@ -23,4 +23,7 @@ Ingress , Ingress Controller
 Logging and monitoring, metrics server
 Volumes, volumemount, pv, pvc, storage classes
 Service Account
-
+KubeConfig file
+API Groups 
+RBAC, Cluster Role, Cluster Rolebinding
+Image Security, access private repo (secret for docker)
