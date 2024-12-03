@@ -8,6 +8,7 @@ Labels and Selectors
 Deployment
 Deployment rollout and version
 Deployment Strategy Rolling updates, Rollback
+Service svc
 
 ConfigMaps
 Secrets
@@ -15,8 +16,6 @@ Secrets
 Namespace
 Namespace – Resource Limits 
 Resource Quotas
-
-Service svc
 
 Docker and Containerd
 Daemonsets
