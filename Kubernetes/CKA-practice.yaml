@@ -1,51 +1,4 @@
-# **** Common With CKAD **** #
-
-
-# **** CKA Only **** #
-
-
-https://kubernetes.github.io/ingress-nginx/examples/rewrite/
-https://github.com/David-VTUK/CKA-StudyGuide
-https://github.com/bmuschko/cka-crash-course
-
-=================================
-kubectl run nginx --image nginx
-ubectl run redis --image redis123
-
-kubectl describe po webapp
-
-kubectl get po -o wide
-
-kubectl delete po webapp
-
-kubectl run redis --image=redis --dry-run -o yaml
-kubectl apply -f redis.yaml
-
-kubectl edit po redis
-
-kubectl scale --replicas=5 replicasset my-app-rc
-
-kubectl get rs -o wide
-
-kubectl delete rs replicaset-{1..4}
-
-kubectl create deploy httpd-frontend --image=httpd:2.4-alpine --replicas=2
-kubectl create deploy httpd-frontend --image=httpd:2.4-alpine --replicas=3 --dry-run=client -o yaml
-
-kubectl get svc
-
-kubectl run redis --image=redis:alpine --labels=tier=db
-
-kubectl expose po redis --port 6379 --name redis-service
-
-kubectl create deploy webapp --image=kodekloud/webapp-color --replicas=3
-
-kubectl create deploy redis-deploy -n dev-ns --image=redis --replicas=2
-
-# creates both service and pod
-kubectl run httpd --image=httpd:alpine --port=80 --expose
-
-k create svc clusterip httpd --tcp=80:80
+# https://github.com/bmuschko/cka-crash-course
 
 # untaint node
 kubectl taint nodes controlplane node-role.kubernetes.io/control-plane:NoSchedule-
@@ -324,13 +277,3 @@ spec:
     app.kubernetes.io/instance: ingress-nginx
     app.kubernetes.io/name: ingress-nginx
   type: NodePort
----
-
-# If the requirement does not match any of the configured paths in the Ingress, to which service are the requests forwarded?
-
-# Execute the command kubectl describe ingress --namespace app-space and examine the Default backend field. If it displays <default>, proceed to inspect the ingress controller's manifest by executing kubectl get deploy ingress-nginx-controller -n ingress-nginx -o yaml. In the manifest, search for the argument --default-backend-service
-controlplane ~ ➜  k get deploy ingress-nginx-controller -n ingress-nginx -o yaml | grep default-backend
-        - --default-backend-service=app-space/default-backend-service
----
-
-k create ingress ingress-pay -n critical-space --rule="wear*=wear-service:80" --dry-run=client -o yaml > my-ingress.yaml
