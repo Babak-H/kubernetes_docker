@@ -1,79 +1,9 @@
-Pods
-Pod commands and argos
-Environment variables, value from cm and secret
-Multi-Container PODs
 
-Replicas and replicasets
-Labels and Selectors 
-Deployment
-Deployment rollout and version
-Deployment Strategy Rolling updates, Rollback
-Service svc
-
-ConfigMaps
-Secrets
-
-Namespace
-Namespace – Resource Limits 
-Resource Quotas
-
-Docker and Containerd
-Daemonsets
-
-Taints and Tolerations
-Nodeselector
-Nodeaffinity
-
-Network policies ,ingress/egress
-Ingress , Ingress Controller
-
-Logging and monitoring, metrics server
-Volumes, volumemount, pv, pvc, storage classes
-
-Service Account
-KubeConfig file
-API Groups 
-
-RBAC, Cluster Role, Cluster Rolebinding
-Image Security, access private repo (secret for docker)
-
-==============================================================
 - kube-apiserver---authorization-mode=Node,RBAC---advertise-address=172.17.0.18---allow-privileged=true---client-ca-file=/etc/kubernetes/pki/ca.crt---disable-admission-plugins=PersistentVolumeLabel---enable-admission-plugins=NodeRestriction---enable-bootstrap-token-auth=true---etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt---etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt---etcd-keyfile=/etc/kubernetes/pki/apiserver-etcd-client.key---etcd-servers=https://127.0.0.1:2379---insecure-port=0---kubelet-client-certificate=/etc/kubernetes/pki/apiserver-kubelet-client.crt---kubelet-client-key=/etc/kubernetes/pki/apiserver-kubelet-client.key---kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname---proxy-client-cert-file=/etc/kubernetes/pki/front-proxy-client.crt---proxy-client-key-file=/etc/kubernetes/pki/front-proxy-client.key---requestheader-allowed-names=front-proxy-client---requestheader-client-ca-file=/etc/kubernetes/pki/front-proxy-ca.crt---requestheader-extra-headers-prefix=X-Remote-Extra----requestheader-group-headers=X-Remote-Group---requestheader-username-headers=X-Remote-User---secure-port=6443---service-account-key-file=/etc/kubernetes/pki/sa.pub---service-cluster-ip-range=10.96.0.0/12---tls-cert-file=/etc/kubernetes/pki/apiserver.crt---tls-private-key-file=/etc/kubernetes/pki/apiserve
 
 
 openssl genrsa-out old-ca.key 2048 openssl req -new -key old-ca.key-subj "/CN=old-ca" -out old-ca.csr openssl x509 -req -in old-ca.csr-signkey old-ca.key-out old-ca.crt -days 365 openssl x509 -req -in ca.csr-signkey ca.key-out server.crt -days 365 openssl req -new -key apiserver-kubelet-client.key-out apiserver-kubelet-client.csr-subj "/CN=kube-apiserver-kubelet-client/O=system:masters" openssl req -new -key apiserver-kubelet-client.key-out apiserver-kubelet-client.csr-subj "/CN=kube-apiserver-kubelet-client/O=system:masters" openssl x509 -req -in apiserver-kubelet-client.csr-CA /root/new-ca/old-ca.crt -CAkey /root/new-ca/old-ca.key-CAcreateserial-out apiserver-kubelet-client-new.crt -days 365 openssl req -new -key apiserver-etcd-client.key-out apiserver-etcd-client.csr-subj "/CN=kube-apiserver-etcd-client/O=system:masters" openssl x509 -req -in apiserver-etcd-client.csr-CA /root/new-ca/old-ca.crt -CAkey /root/new-ca/old-ca.key-CAcreateserial-out apiserver-etcd-client-new.crt -days 365 openssl req -new -key apiserver-etcd-client.key-out apiserver-etcd-client.csr-subj "/CN=kube-apiserver-etcd-client/O=system:masters" openssl x509 -req -in apiserver-etcd-client.csr-CA /root/new-ca/old-ca.crt -CAkey /root/new-ca/old-ca.key-CAcreateserial-out apiserver-etcd-client-new.crt -days 365 openssl req -new -key /etc/kubernetes/pki/apiserver-etcd-client.key-out apiserver-etcd-client.csr-subj "/CN=kube-apiserver-etcd-client/O=system:masters" openssl x509 -req -in apiserver-etcd-client.csr-CA ca.crt -CAkey ca.key-CAcreateserial-out apiserver-etcd-client.crt -days -10 openssl x509 -req -in apiserver-etcd-client.csr-CA ca.crt -CAkey ca.key-CAcreateserial-out apiserver-etcd-client.crt -startdate 190101010101Z 20170101000000Z 200801010000Z "openssl", "req", "-new", "-key" ,"/etc/kubernetes/pki/apiserver-etcd-client.key", "-out", "/etc/kubernetes/pki/apiserver-etcd-client.csr", "-subj", "/CN=kube-apiserver-etcd client/O=system:masters" "openssl", "x509", "-req", "-in", "/etc/kubernetes/pki/apiserver-etcd-client.csr", "-CA", "/etc/kubernetes/pki/etcd/ca.crt", "-CAkey", "/etc/kubernetes/pki/etcd/ca.key", "-CAcreateserial", "-out", "/etc/kubernetes/pki/apiserver-etcd-client.crt" openssl x509 -req -in /etc/kubernetes/pki/apiserver-etcd-client.csr-CA /etc/kubernetes/pki/etcd/ca.crt -CAkey /etc/kubernetes/pki/etcd/ca.key-CAcreateserial-out /etc/kubernetes/pki/apiserver-etcd-client.crt -days 100 openssl x509 -req -in apiserver.csr-CA ca.crt -CAkey ca.key-CAcreateserial-out apiserver.crt
 
-
-
-
-================================
-# create a pod that will start at predetermined time and which runs to completion only once and run command "date" => CronJob
-# it should finish in 22 seconds or stop the pod
-# k create cronjob hello --image=busybox --schedule="*/1 * * * *" --dry-run=client -o yaml -- date > j.yaml
----
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-    name: hello
-spec:
-  schedule: '*/1 * * * *'
-  jobTemplate:
-    metadata:
-      name: hello
-    spec:
-      template:
-        spec:
-          # end the job in 22 seconds
-          activeDeadlineSeconds: 22
-          containers:
-            - command:
-                - date
-              image: busybox
-              name: hello
-          restartPolicy: Never
-# k get cronjob
-# k get job => make sure it is completed
-# k get po => make sure pod has no errors
 #=============================================================================================
 # k run nginx-resources --image=nginx --restart=Never --dry-run=client -o yaml > pod.yaml
 ---
@@ -271,17 +201,6 @@ spec:
           path: /healthz
           port: 8080
 #=============================================================================================
-# run the pod using the given yaml file, get all available logs and save them to the given file
-# k apply -f /opt/KDOB00201/counter.yaml
-# k get po
-# k logs counter
-# k logs counter -f > /opt/KDOB00201/log_output.yaml
-# cat /opt/KDOB00201/log_output.yaml
-#=============================================================================================
-# from the pods running in namespace cpu-stress , write the name only of the pod that is consuming the most CPU to file /opt/KDOBG030l/pod.txt, which has already been created
-# k top pods -n cpu-stress
-# echo "max-loaded-95" > /opt/KDOBG030l/pod.txt
-#=============================================================================================
 # k run pod1 --image=Ifccncf/arg-output --dry-run=client -o yaml -- -line 56 -F > /opt/KDPD00101/pod1.yaml
 ---
 apiVersion: v1
@@ -428,27 +347,6 @@ spec:
 # k run temp --image=nginx:alpine -- curl 10.44.0.78
 # k logs temp
 #=============================================================================================
-
-# Exporting built container images in OCI format.
-# A Dockerfile has been prepared at ./human-stork/build/Dockerfile
-# Using the prepared Dockerfile, build a container image with the name macaque and tag 3.0. You may install and use the tool you like
-# store the image as /human-stork/build/macaque-3.0.tar file
-
-# cd /human-stork/build/
-# sudo docker build -t macaque:3.0 .
-# sudo docker save macaque:3.0 > /human-stork/build/macaque-3.0.tar
-
-# sudo docker build -t registry.killer.sh:5000/sun-cipher:latest -t registry.killer.sh:5000/sun-cipher:v1-docker .  # build image with two tags
-# sudo docker image ls
-# sudo docker push registry.killer.sh:5000/sun-cipher:latest
-# sudo docker push registry.killer.sh:5000/sun-cipher:v1-docker
-
-# podman build -t registry.killer.sh:5000/sun-cipher:v1-podman .
-# podman push registry.killer.sh:5000/sun-cipher:v1-podman
-# podman run -d --name sun-cipher registry.killer.sh:5000/sun-cipher:v1-podman
-# podman ps > /opt/course/containers
-# podman logs sun-cipher > /opt/course/11/logs
-#=============================================================================================
 # Configuring security contexts for Pods and containers.
 
 # Modify the existing Deployment named broker-deployment running in namespace quetzal so that its containers:
@@ -524,81 +422,6 @@ spec:
         - port: 53
           protocol: TCP
 #=============================================================================================
-# Canary deployment to distribute traffic in a 60-40 percent split.
-
-# You are asked to prepare a Canary deployment for testing a new application release.
-# A Service named krill-Service in the goshark namespace points to 5 pod created by the Deployment named current-krill-deployment
-# Create an identical Deployment named canary-krill-deployment, in the same namespace.
-# 2) Modify the Deployment so that:
-# a maximum number of 10 pods run in the goshark namespace.
-# 40% of the krill-service 's traffic goes to the canary-krill-deployment pod(s) , 6 main 4 canary
-
-# service
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: krill-Service
-  namespace: goshark
-spec:
-  selector:
-    app: krill-deployment  # this label should be on pods on both types of deployments
-  type: NodePort
-  ports:
-    - port: 8080
-      nodePort: 30000
-# k edit current-krill-deployment -n goshark
-# or just run
-# k scale deploy current-krill-deployment --replicas=6 -n goshark
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: current-krill-deployment
-  namespace: goshark
-  labels:
-    app: krill-deployment
-spec:
-  replicas: 6  # change from 5 to 6
-  selector:
-    matchLabels:
-      app: krill-deployment
-  template:
-    metadata:
-      name: myapp-pod
-      labels:
-        version: v1 # we can have different label for pods in each deployment
-        app: krill-deployment # shared label
-    spec:
-      containers:
-        - name: krill-deployment
-          image: nginx
-          
-# canary-krill-deployment
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: canary-krill-deployment
-  namespace: goshark
-  labels:
-    app: krill-deployment
-spec:
-  replicas: 4
-  selector:
-    matchLabels:
-      app: krill-deployment
-  template:
-    metadata:
-      name: myapp-pod
-      labels:
-        version: v2 # we can have different label for pods in each deployment
-        app: krill-deployment # shared label
-    spec:
-      containers:
-        - name: krill-deployment
-          image: nginx
-#=============================================================================================
 # multi-container pod
 # we have a container that writes log files in format A and another that converts logs to format B, create a deployment
 # that runs both containers
@@ -646,62 +469,7 @@ initContainers:
           mountPath: /var/log/cleaner
 
 # you can't mount a volume to root of a container!  mountPath: /  => will fail
-#=============================================================================================
-# labels and annotations
 
-# Team Sunny needs to identify some of their Pods in namespace sun. They ask you to add a new label protected: true to all Pods
-# with an existing label type: worker or type: runner.
-# Also add an annotation 'protected: do not delete this pod' to all Pods having the new label 'protected: true'.
-
-# k -n sun label pod -l "type in (worker, runner)" protected=true
-
-# k -n sun annotate pod -l "protected=true" protected="do not delete this pod"
-
-# get specific label or annotation from a pod from a list of pods
-# k -n saturn describe pod | grep -i my-happy-shop
-# k -n saturn get pod -o yaml | grep -i my-happy-shop
-#=============================================================================================
-
-# a pod is unreachable due to failing livenessProbe
-# find the broken pod and store its name and namespace to file /opt/KDBOD23423/broken.txt in format namespace/pod
-# store associated error events to file /opt/KDBOD23423/error.txt
-# fix the issue
-
-# k get po -A | grep "qa|prod|dev|lab"
-# k get po -A | grep -i failed
-# echo "mynamespace/my-pod" > /opt/KDBOD23423/broken.txt
-
-# 'error events' are saved in the later section of pod describe
-# k describe pod my-pod -n mynamespace | grep -i error > /opt/KDBOD23423/error.txt
-
-# based on error events we can fix the issue, it can be image is wrong or pod doesn't have enough resources (OOM Kill) or livenessProbe not set correctly
-#=============================================================================================
-
-# a deployment is failing on the cluster due to an incorrect image being used, locate the deployment and fix the problem
-
-# k get deploy  # this might NOT show that why deployment is failing
-# k get po
-
-# k edit deploy my-nginx-deployment
-# change the image to correct value
-# k get po
-#=============================================================================================
-# helm
-
-# Delete release internal-issue-report-apiv1
-# helm -n mercury uninstall internal-issue-report-apiv1
-
-# Upgrade release internal-issue-report-apiv2 to any newer version of chart bitnami/nginx available
-# helm -n mercury upgrade internal-issue-report-apiv2 bitnami/nginx
-
-# Install a new release internal-issue-report-apache of chart bitnami/apache. The Deployment should have two replicas, set these via Helm-values during install
-# helm -n mercury show values bitnami/apache | grep -i count
-# helm -n mercury install internal-issue-report-apache bitnami/apache --set replicaCount=2
-
-# There seems to be a broken release, stuck in pending-install state. Find it and delete it
-# By default releases in pending-upgrade state aren't listed, but we can show all to find and delete the broken release
-# helm -n mercury ls -a
-# helm -n mercury uninstall internal-issue-report-daniel
 #=============================================================================================
 # PVC, PVC, StorageClass
 
@@ -772,46 +540,136 @@ metadata:
   name: moon-retain
 provisioner: moon-retainer
 reclaimPolicy: Retain
+#==============================================
 
-#=============================================================================================
-# Working with deprecated APIs.
-# k convert -f givenfile.yaml --output-version=apps/v1 | k apply -f
+k run webapp-green --image=kodekloud/webapp-color -- --color green
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app
+  namespace: elastic-stack
+  labels:
+    name: app
+spec:
+  containers:
+  - name: app
+    image: kodekloud/event-simulator
+    volumeMounts:
+    - mountPath: /log
+      name: log-volume
 
-# try to fix any api deprecation issues in the manifest file /credible-mite/www.yaml so that the application can be deployed to the k8s cluster
-# app was created for k8s version 1.15 but current version of cluster is v1.24
-# deploy application with updated manifest to namespace cobra
+  - name: sidecar
+    image: kodekloud/filebeat-configured
+    volumeMounts:
+    - mountPath: /var/log/event-simulator/
+      name: log-volume
 
-# k convert -f /credible-mite/www.yaml --output-version=apps/v1   # this changes the same file
-# cat /credible-mite/www.yaml
-# k apply -f /credible-mite/www.yaml -n cobra
+  volumes:
+  - name: log-volume
+    hostPath:
+      # directory location on host
+      path: /var/log/webapp
+      # this field is optional
+      type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels:
+    app: myapp
+spec:
+  containers:
+  - name: myapp-container
+    image: busybox:1.28
+    command: ['sh', '-c', 'echo The app is running! && sleep 3600']
+  initContainers:
+  - name: init-myservice
+    image: busybox:1.28
+    command: ['sh', '-c', 'until nslookup myservice; do echo waiting for myservice; sleep 2; done;']
+  - name: init-mydb
+    image: busybox:1.28
+    command: ['sh', '-c', 'until nslookup mydb; do echo waiting for mydb; sleep 2; done;']
+    ################################3
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: read-pods
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: dashboard-sa # Name is case sensitive
+  namespace: default
+roleRef:
+  kind: Role #this must be Role or ClusterRole
+  name: pod-reader # this must match the name of the Role or ClusterRole you wish to bind to
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: default
+  name: pod-reader
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - get
+  - watch
+  - list
+---
+
+kubectl create token dashboard-sa
+
+kubectl set serviceaccount deploy/web-dashboard dashboard-sa
 
 ---
-apiVersion: apps/v1  # make sure version is correct
-kind: Deployment
+
+kubectl create secret docker-registry private-reg-cred --docker-server=myprivateregistery.com:5000 \
+--docker-username=dock_user --docker-password=dock_password --docker-email=docker_user@myprivateregistery.com
+
+---
+apiVersion: v1
+kind: Pod
 metadata:
-  name: www-deployment
-  namespace: cobra  # make sure it is for correct namespace
+  name: web
 spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: nginx
-  template:
-    metadata:
-      labels:
-        app: nginx
-    spec:
-      containers:
-        - name: nginx
-          image: nginx:stable
-          ports:
-            - containerPort: 80
-            
+  containers:
+  - name: nginx
+    image: myprivateregistery.com:5000/nginx:alpine
+  imagePullSecrets:
+  - name: private-reg-cred
+---
 
+cat /usr/include/linux/capability.h
 
-# =======================================================================
-# *** Lecture 109 ***
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-pod
+spec:
+  securityContext:
+    runAsUser: 1001
+  containers:
+  -  image: ubuntu    # runs as user 1002
+     name: web
+     command: ["sleep", "5000"]
+     securityContext:
+      runAsUser: 1002
 
+  -  image: ubuntu  # runs as user 1001
+     name: sidecar
+     command: ["sleep", "5000"]
+---
+# A set of Persistent Volumes are available. Sort them based on their capacity and store the result in the file /opt/outputs/storage-capacity-sorted.txt
+kubectl get pv -o json
+kubectl get pv --sort-by=.spec.capacity.storage > /opt/outputs/storage-capacity-sorted.txt
+#============================
 # find all static pods
 k get po -A | grep controlplane
 k get po -A -o wide | grep controlplane
@@ -891,57 +749,6 @@ spec:
     name: nginx
   schedulerName: my-scheduler
 ----------------
-
-k run webapp-green --image=kodekloud/webapp-color -- --color green
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: app
-  namespace: elastic-stack
-  labels:
-    name: app
-spec:
-  containers:
-  - name: app
-    image: kodekloud/event-simulator
-    volumeMounts:
-    - mountPath: /log
-      name: log-volume
-
-  - name: sidecar
-    image: kodekloud/filebeat-configured
-    volumeMounts:
-    - mountPath: /var/log/event-simulator/
-      name: log-volume
-
-  volumes:
-  - name: log-volume
-    hostPath:
-      # directory location on host
-      path: /var/log/webapp
-      # this field is optional
-      type: DirectoryOrCreate
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: myapp-pod
-  labels:
-    app: myapp
-spec:
-  containers:
-  - name: myapp-container
-    image: busybox:1.28
-    command: ['sh', '-c', 'echo The app is running! && sleep 3600']
-  initContainers:
-  - name: init-myservice
-    image: busybox:1.28
-    command: ['sh', '-c', 'until nslookup myservice; do echo waiting for myservice; sleep 2; done;']
-  - name: init-mydb
-    image: busybox:1.28
-    command: ['sh', '-c', 'until nslookup mydb; do echo waiting for mydb; sleep 2; done;']
----
 
 k drain node01 --ignore-daemonsets
 
@@ -1352,80 +1159,7 @@ kubectl get pods --as dev-user
 
 # if you want to give access to user to see objects in different namespace, then he needs role and rolebinding that exist in that namespace
 
----
-kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: read-pods
-  namespace: default
-subjects:
-- kind: ServiceAccount
-  name: dashboard-sa # Name is case sensitive
-  namespace: default
-roleRef:
-  kind: Role #this must be Role or ClusterRole
-  name: pod-reader # this must match the name of the Role or ClusterRole you wish to bind to
-  apiGroup: rbac.authorization.k8s.io
----
-kind: Role
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  namespace: default
-  name: pod-reader
-rules:
-- apiGroups:
-  - ''
-  resources:
-  - pods
-  verbs:
-  - get
-  - watch
-  - list
----
-
-kubectl create token dashboard-sa
-
-kubectl set serviceaccount deploy/web-dashboard dashboard-sa
-
----
-
-kubectl create secret docker-registry private-reg-cred --docker-server=myprivateregistery.com:5000 \
---docker-username=dock_user --docker-password=dock_password --docker-email=docker_user@myprivateregistery.com
-
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: web
-spec:
-  containers:
-  - name: nginx
-    image: myprivateregistery.com:5000/nginx:alpine
-  imagePullSecrets:
-  - name: private-reg-cred
----
-
-cat /usr/include/linux/capability.h
-
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: multi-pod
-spec:
-  securityContext:
-    runAsUser: 1001
-  containers:
-  -  image: ubuntu    # runs as user 1002
-     name: web
-     command: ["sleep", "5000"]
-     securityContext:
-      runAsUser: 1002
-
-  -  image: ubuntu  # runs as user 1001
-     name: sidecar
-     command: ["sleep", "5000"]
----
+#============================
 
 # What is the network interface configured for cluster connectivity on the controlplane node?
 
@@ -2329,7 +2063,3 @@ kubectl get nodes -o=jsonpath='{.items[*].status.nodeInfo.osImage}' > /opt/outpu
 kubectl config view --kubeconfig=/root/my-kube-config
 kubectl config view --kubeconfig=/root/my-kube-config -o json
 kubectl config view --kubeconfig=/root/my-kube-config -o=jsonpath='{.users[*].name}' > /opt/outputs/users.txt
-
-# A set of Persistent Volumes are available. Sort them based on their capacity and store the result in the file /opt/outputs/storage-capacity-sorted.txt
-kubectl get pv -o json
-kubectl get pv --sort-by=.spec.capacity.storage > /opt/outputs/storage-capacity-sorted.txt
