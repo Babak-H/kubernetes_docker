@@ -670,6 +670,287 @@ spec:
 kubectl get pv -o json
 kubectl get pv --sort-by=.spec.capacity.storage > /opt/outputs/storage-capacity-sorted.txt
 #============================
+# https://github.com/bmuschko/cka-crash-course
+
+# untaint node
+kubectl taint nodes controlplane node-role.kubernetes.io/control-plane:NoSchedule-
+
+# The application stores logs at location /log/app.log. View the logs.
+# You can exec in to the container and open the file:
+kubectl exec webapp -- cat /log/app.log
+
+
+# What network range are the nodes in the cluster part of?
+
+# find the Internal IP of the nodes.
+ip a | grep eth0
+# Next, use the ipcalc tool to see the network details:
+ipcalc -b 192.14.41.6/24 
+        Address:   192.14.41.6          
+        Netmask:   255.255.255.0 = 24   
+        Wildcard:  0.0.0.255            
+        =>
+        Network:   192.14.41.0/24       
+        HostMin:   192.14.41.1          
+        HostMax:   192.14.41.254        
+        Broadcast: 192.14.41.255        
+        Hosts/Net: 254                   Class C
+
+# Network:   192.14.41.0/24    is the ip range
+
+
+# What is the range of IP addresses configured for PODs on this cluster?
+
+# The network is configured with weave. Check the weave pods logs
+controlplane ~ ➜  k logs weave-net-b9kh7 -n kube-system | grep ipalloc
+Defaulted container "weave" out of: weave, weave-npc, weave-init (init)
+INFO: 2024/11/26 14:03:24.230278 Command line options: map[conn-limit:200 datapath:datapath db-prefix:/weavedb/weave-net docker-api: expect-npc:true http-addr:127.0.0.1:6784 
+ipalloc-init:consensus=1 ipalloc-range:10.244.0.0/16 metrics-addr:0.0.0.0:6782 name:b2:c2:ed:7f:e2:78 nickname:node01 no-dns:true no-masq-local:true port:6783]
+
+# ipalloc-range:10.244.0.0/16
+
+# What is the IP Range configured for the services within the cluster?
+
+# Inspect the setting on kube-api server 
+controlplane ~ ➜  cat /etc/kubernetes/manifests/kube-apiserver.yaml | grep cluster-ip-range
+    - --service-cluster-ip-range=10.96.0.0/12
+
+# What type of proxy is the kube-proxy configured to use?
+
+# Check the logs of the kube-proxy pods
+controlplane ~ ➜  k logs kube-proxy-6xjw6 -n kube-system
+I1126 14:02:33.141546       1 server_linux.go:66] "Using iptables proxy"
+I1126 14:02:33.428064       1 server.go:677] "Successfully retrieved node IP(s)" IPs=["192.14.41.6"]
+
+
+# Identify the DNS solution implemented in this cluster.
+controlplane ~ ➜  kubectl get pods -n kube-system | grep dns
+coredns-77d6fd4654-5h89h               1/1     Running   0          2m27s
+coredns-77d6fd4654-mczjv               1/1     Running   0          2m27s
+
+# What is the IP of the CoreDNS server that should be configured on PODs to resolve services?
+controlplane ~ ➜  kubectl get svc -n kube-system | grep dns
+kube-dns   ClusterIP   172.20.0.10   <none>        53/UDP,53/TCP,9153/TCP   3m13s
+
+# Where is the configuration file located for configuring the CoreDNS service?
+
+# Inspect the Args field of the coredns deployment and check the file used.
+controlplane ~ ➜  kubectl -n kube-system describe deployment coredns | grep -A2 Args
+    Args:
+      -conf
+      /etc/coredns/Corefile
+
+# How is the Corefile passed into the CoreDNS POD?
+controlplane ~ ➜  kubectl get cm -n kube-system | grep dns
+coredns                                                1      7m3s
+
+# What is the root domain/zone configured for this kubernetes cluster?
+k get cm coredns -n kube-system -o yaml
+
+        apiVersion: v1
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health {
+           lameduck 5s
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        prometheus :9153
+        forward . /etc/resolv.conf {
+           max_concurrent 1000
+        }
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+
+# cluster.local
+
+# Which of the below name CANNOT be used to access the payroll service from the test application?
+
+        controlplane ~ ➜  k get po 
+        NAME                READY   STATUS    RESTARTS   AGE
+        hr                  1/1     Running   0          8m31s
+        simple-webapp-1     1/1     Running   0          8m12s
+        simple-webapp-122   1/1     Running   0          8m12s
+        test                1/1     Running   0          8m31s
+
+        controlplane ~ ➜  k get svc
+        NAME           TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+        kubernetes     ClusterIP   172.20.0.1       <none>        443/TCP        9m26s
+        test-service   NodePort    172.20.90.60     <none>        80:30080/TCP   8m33s
+        web-service    ClusterIP   172.20.203.129   <none>        80/TCP         8m34s
+
+        controlplane ~ ➜  k get po -n payroll
+        NAME   READY   STATUS    RESTARTS   AGE
+        web    1/1     Running   0          8m40s
+
+        controlplane ~ ➜  k get svc -n payroll
+        NAME          TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+        web-service   ClusterIP   172.20.140.81   <none>        80/TCP    8m48s
+
+# web-service.payroll.svc.cluster.local   can
+# web-service.payroll.svc.cluster    CAN'T
+# web-service.payroll.svc   can
+# web-service.payroll   can
+
+
+# From the hr pod nslookup the mysql service (in payroll namespace) and redirect the output to a file /root/CKA/nslookup.out
+controlplane ~ ✖ kubectl exec -it hr -- nslookup mysql.payroll.svc.cluster.local > /root/CKA/nslookup.out
+
+----
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/instance: ingress-nginx
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+    app.kubernetes.io/version: 1.1.2
+    helm.sh/chart: ingress-nginx-4.0.18
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+spec:
+  minReadySeconds: 0
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: controller
+      app.kubernetes.io/instance: ingress-nginx
+      app.kubernetes.io/name: ingress-nginx
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: controller
+        app.kubernetes.io/instance: ingress-nginx
+        app.kubernetes.io/name: ingress-nginx
+    spec:
+      containers:
+      - args:
+        - /nginx-ingress-controller
+        - --publish-service=$(POD_NAMESPACE)/ingress-nginx-controller
+        - --election-id=ingress-controller-leader
+        - --watch-ingress-without-class=true
+        - --default-backend-service=app-space/default-http-backend
+        - --controller-class=k8s.io/ingress-nginx
+        - --ingress-class=nginx
+        - --configmap=$(POD_NAMESPACE)/ingress-nginx-controller
+        - --validating-webhook=:8443
+        - --validating-webhook-certificate=/usr/local/certificates/cert
+        - --validating-webhook-key=/usr/local/certificates/key
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: LD_PRELOAD
+          value: /usr/local/lib/libmimalloc.so
+        image: registry.k8s.io/ingress-nginx/controller:v1.1.2@sha256:28b11ce69e57843de44e3db6413e98d09de0f6688e33d4bd384002a44f78405c
+        imagePullPolicy: IfNotPresent
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /wait-shutdown
+        livenessProbe:
+          failureThreshold: 5
+          httpGet:
+            path: /healthz
+            port: 10254
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: controller
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        - containerPort: 443
+          name: https
+          protocol: TCP
+        - containerPort: 8443
+          name: webhook
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 10254
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          requests:
+            cpu: 100m
+            memory: 90Mi
+        securityContext:
+          allowPrivilegeEscalation: true
+          capabilities:
+            add:
+            - NET_BIND_SERVICE
+            drop:
+            - ALL
+          runAsUser: 101
+        volumeMounts:
+        - mountPath: /usr/local/certificates/
+          name: webhook-cert
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      nodeSelector:
+        kubernetes.io/os: linux
+      serviceAccountName: ingress-nginx
+      terminationGracePeriodSeconds: 300
+      volumes:
+      - name: webhook-cert
+        secret:
+          secretName: ingress-nginx-admission
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/instance: ingress-nginx
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+    app.kubernetes.io/version: 1.1.2
+    helm.sh/chart: ingress-nginx-4.0.18
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+    nodePort: 30080
+  selector:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/instance: ingress-nginx
+    app.kubernetes.io/name: ingress-nginx
+  type: NodePort
+
+#-----------------------------------
 # find all static pods
 k get po -A | grep controlplane
 k get po -A -o wide | grep controlplane
