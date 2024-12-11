@@ -58,6 +58,8 @@ spec:
     - name: config-volume
       configMap:
         name: my-scheduler-config
+
+# Pod using Custom scheduler
 ---
 apiVersion: v1
 kind: Pod 
