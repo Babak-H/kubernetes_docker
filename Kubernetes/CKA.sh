@@ -1,3 +1,16 @@
+# kube-apiserver => heart of the kubernetes, connects all systems together
+# etcd => key-value database that keeps the latest value for different cluster related varialbes (how many nodes, how many pods, secrets, configmaps,...)
+# controller-manager => manages all controllers (deployment controller, pod controller, volume controller,...)
+# kube-scheduler => schedule which pod on which node
+# kube-proxy => creates services to connect pods together
+
+# kube-apiserver => 6443
+# kubelet => 10250
+# kube-scheduler => 10251
+# kube-controller-manager => 10252
+# etcd => 2379-2380
+
+
 # untaint node
 k taint nodes controlplane node-role.kubernetes.io/control-plane:NoSchedule-
 
