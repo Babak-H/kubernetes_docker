@@ -153,20 +153,55 @@ echo "POD-NAME" >> /opt/KUTR00401/KUTR00401.txt  # >> adds it to the files and e
 # list all persistent volumes sorted by capacity, saving the full kubectl output to /opt/pv/pv_list.txt
 k get pv --sort-by=.spec.capacity.storage > /opt/pv/pv_list.txt
 
-##############################
+# list the nginx pod with custom columns POD_NAME and POD_STATUS
+k get po -o=custom-columns="POD_NAME:.metadata.name,POD_STATUS:.status.containerStatuses[].state"
 
+# find pods with label app=mysql that are executing high cpu workloads and write name of pod consuming the most cpu to file /opt/toppods.yaml
+k top pods -l app=mysql --sort-by=cpu
+echo 'mysql-deployment-77fgf-345' >> /opt/toppods.yaml
+cat /opt/toppods.yaml
+
+# print name of all deployments in admin2406 namespace
+# order: <deployment-name> <container-image> <readt-replica-count> <namespace>
+k -n admin2406 get deploy -o custom-columns=DEPLOYMENT:.metadata.name, \
+                                       CONTAINER_IMAGE:.spec.template.spec.containers[*].image, \
+                                       READY_REPLICAS: .status.readyReplicas, \
+                                       NAMESPACE: .metadata.namespace \
+                                       --sort-by=.metadata.name > /opt/admin2406_data
+
+# # From the hr pod nslookup the mysql service (in payroll namespace) and redirect the output to a file /root/CKA/nslookup.out
+k exec hr -- nslookup mysql.payroll.svc.cluster.local > /root/CKA/nslook.out
+
+# list all pods sorted by timestamp
+k get po --sort-by=.metadata.creationTimestamp
+
+############################## Role, RoleBinding, ClusterRole, ClusterRoleBinding
 # You have been asked to create a new ClusterRole for a deployment pipeline and bind it to a specific ServiceAccount scoped to a specific namespace.
 # Create a new ClusterRole named deployment-clusterrole, which only allows to create the following resource types: Deployment, StatefulSet, DaemonSet
 # Create a new ServiceAccount named cicd-token in the existing namespace app-team1, Bind the new ClusterRole deployment-clusterrole to the new ServiceAccount cicd-token, limited to the namespace app-team1.
-kubectl create clusterrole deployment-clusterrole --verb=create --resource=deployment,statefulset,daemonset -o yaml --dry-run=client | kubectl apply -f -
-kubectl create serviceaccount cicd-token -n app-team1
-kubectl create clusterrolebinding deployment-clusterrolebinding --clusterrole=deployment-clusterrole --serviceaccount=cicd-token --namespace=app-team1 -o yaml | kubectl apply -f -
+k create clusterrole deployment-clusterrole --verb=create --resource=deployment,statefulset,daemonset -o yaml --dry-run=client | k apply -f -
+k create serviceaccount cicd-token -n app-team1
+k create clusterrolebinding deployment-clusterrolebinding --clusterrole=deployment-clusterrole --serviceaccount=cicd-token -n app-team1 -o yaml --dry-run=client | kubectl apply -f -
+k auth can-i create deployment -n app-team1 --as system:serviceaccount:app-team1:cicd-token # yes
+k auth can-i create daemonset -n app-team1 --as=system:serviceaccount # no
 
-kubectl auth can-i create deployment -n app-team1 --as system:serviceaccount:app-team1:cicd-token # yes
-kubectl auth can-i create daemonset -n app-team1 --as=system:serviceaccount                       # no
+# create a new serviceAccount with name "pvviewer", grant this SA access to list all PVs in the cluster by creating correct ClusterRole called "pvviewer-role" 
+# and clusterRoleBinding called "pvviewer-role-binding"
+k creeate serviceaccount pvviewer
+k get sa
+k create clusterrole pvviewer-role --verb=list --resource=PersistentVolumes
+k get cr
+k create clusterrolebinding pvviewer-role-binding --cluster-role=pvviewer-role --serviceaccount=pvviewer
+k auth can-i list persistentvolumes --as system:serviceaccount:default:pvviewer  # yes
 
+# create a new serviceAccount "gitops" in namespace "project-1" create role and rolebinding both named "gitops-role" and "gitops-rolebinding". allows the SA 
+# to create secrets and configmaps in the namespace
+k create serviceaccount gitops -n project-1
+k create role gitops-role -n project-1 --verb=create --resources=secrets,configmpas
+k create rolebinding gitops-rolebinding -n project-1 --role=gitops-role --serviceaccount=gitops
+k auth can-i create secret -n project-1 --as system:serviceaccount:project-1:gitops
 
-
+############################## NetworkPolicy
 
 
 
@@ -456,17 +491,6 @@ k apply -f nginx.yaml
 k config use-context k8s
 k scale deploy guestbook --replicas=5
 
-
-# create a new serviceAccount with name "pvviewer", grant this SA access to list all PVs in the cluster by creating correct ClusterRole called "pvviewer-role" and clusterRoleBinding
-# called "pvviewer-role-binding"
-k creeate serviceaccount pvviewer
-k get sa
-k create clusterrole pvviewer-role --verb=list --resource=PersistentVolumes
-k get cr
-k create clusterrolebinding pvviewer-role-binding --cluster-role=pvviewer-role --serviceaccount=pvviewer
-k auth can-i list persistentvolumes --as system:serviceaccount:default:pvviewer
-
-
 # create a deployment called nginx-deploy with image nginx:1.16 and 1 replica. record the version then upgrade the version of image to 1.17 via rolling update and record the change
 k create deploy nginx-deploy --image=nginx:1.16 --replicas=1 --dry-run=client -o yaml > deploy.yaml
 vi deploy.yaml
@@ -534,10 +558,6 @@ k apply -f po.yaml
 
 k create -f policy.yaml
 
-
-# list all pods sorted by timestamp
-k get po --sort-by=.metadata.creationTimestamp
-
 # create a redis pod with a non-persistent volume
 apiVersion: v1
 kind: Pod
@@ -578,8 +598,7 @@ k get po
 # create a busybox pod and add a "sleep 3600" command
 k run busybox --image=busybox --restart=Never -- /bin/sh -c 'sleep 3600'
 
-# list the nginx pod with custom columns POD_NAME and POD_STATUS
-k get po -o=custom-columns="POD_NAME:.metadata.name,POD_STATUS:.status.containerStatuses[].state"
+
 
 # create apod named nginxpod with image nginx and label env=prod in production namespace
 k get ns
@@ -684,14 +703,6 @@ k create ns project-1
 
 k apply -f ds.yaml
 k get ds -n project1 -o wide
-
-
-# create a new serviceAccount "gitops" in namespace "project-1" create role and rolebinding both named "gitops-role" and "gitops-rolebinding". allows the SA 
-# to create secrets and configmaps in the namespace
-k create serviceaccount gitops -n project-1
-k create role gitops-role -n project-1 --verb=create --resources=secrets,configmpas
-k create rolebinding gitops-rolebinding -n project-1 --role=gitops-role --serviceaccount=project-1:gitops
-
 
 # create a pod "web-pod" using image "nginx" with a limit 0.5cpu and 200Mi memory and resource request of 0.1 cpu and 100 mi memory in develop namespace
 k run web-pod -n develop --dry-run=client -o yaml > pod.yaml
@@ -802,27 +813,10 @@ k create deploy web-deploy --image=nginx:1.14.2 --replicas=3 --dry-run=client -o
 #             - mountPath: /tmp/web-data
 #               name: web-volume
 
-# find pods with label app=mysql that are executing high cpu workloads and write name of pod consuming the most cpu to file /opt/toppods.yaml
-k top pods -l app=mysql --sort-by=cpu
-echo 'mysql-deployment-77fgf-345' >> /opt/toppods.yaml
-cat /opt/toppods.yaml
+
 
 
 #########################################################
-
-
-
-
-
-
-### print name of all deployments in admin2406 namespace
-# order: <deployment-name> <container-image> <readt-replica-count> <namespace>
-kubectl -n admin2406 get deployment -o custom-columns=DEPLOYMENT:.metadata.name, \
-                                       CONTAINER_IMAGE:.spec.template.spec.containers[*].image, \
-                                       READY_REPLICAS: .status.readyReplicas, \
-                                       NAMESPACE: .metadata.namespace \
-                                       --sort-by=.metadata.name > /opt/admin2406_data
-
 
 ### A new deployment called 'alpha-mysql' has been deployed in the 'alpha' namespace. However, the pods are not running. Troubleshoot and fix the issue. The deployment should make use of the 
 # persistent volume 'alpha-pv' to be mounted at /'var/lib/mysql' and should use the environment variable 'MYSQL_ALLOW_EMPTY_PASSWORD=1' to make use of an empty root password. Do NOT alter the persistent volume.
@@ -874,8 +868,5 @@ vi admin.yaml
 #     - name: secret-volume
 #       readOnly: true
 #       mountPath: "/etc/secret-volume"
-
-# # From the hr pod nslookup the mysql service (in payroll namespace) and redirect the output to a file /root/CKA/nslookup.out
-k exec hr -- nslookup mysql.payroll.svc.cluster.local > /root/CKA/nslook.out
 
 kubectl apply -f admin.yaml
