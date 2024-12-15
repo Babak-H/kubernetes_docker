@@ -1,3 +1,160 @@
+############################ Upgrade Cluster
+# Given an existing Kubernetes cluster running version 1.22.1, upgrade all of the Kubernetes control plane and node components on the master node only to version 1.22.2.
+# Be sure to drain the master node before upgrading it and uncordon it after the upgrade
+# You are also expected to upgrade kubelet and kubectl on the master node, do NOT upgrade the worker nodes, etcd, the containerv manager, the CNI plugins or the DNS service
+# You are also expected to upgrade kubelet and kubectl on the master node.
+
+k config use-context mk8s
+k cordon mk8s-master-0
+k drain mk8s-master-0 --ignore-daemonsets
+k get nodes
+ssh mk8s-master-0
+sudo -i
+sudo apt-mark unhold kubeadm sudo apt-get update && sudo apt-get install -y kubeadm='1.32.x-*' && sudo apt-mark hold kubeadm
+kubeadm version
+sudo kubeadm upgrade plan
+sudo kubeadm upgrade apply v1.32.x --etcd-upgrade=false --skip-phases=addon/coredns
+sudo apt-mark unhold kubelet kubectl && sudo apt-get update && sudo apt-get install -y kubelet='1.32.x-*' kubectl='1.32.x-*' && sudo apt-mark hold kubelet kubectl
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+exit
+k uncordon mk8s-master-0
+k get nodes
+
+############################ Join Node to cluster
+# join node01 worker node to cluster and you have to deploy pod on the node01, pod name should be web and image should be nginx
+
+k get nodes
+ssh controlplane # in case we are not on master node
+kubeadm token create --print-join-command  # save the output command and use it on node01
+ssh node01
+kubeadm join 172.30.1.2:6443 --token TOKEN --discovery-token-ca-cert-hash CERT-HASH
+# if there is any error here check the kubelet
+systemctl status kubelet
+systemctl start kubelet
+systemctl status kubelet
+exit
+kubectl get nodes
+kubectl run web --image=nginx
+kubectl get pods
+
+############################ ETCD Backup Restore
+# create a snapshot of the existing etcd instance running at https://127.0.0.1:2379, saving the snapshot to /var/lib/backup/etcd-snapshot.db
+# ca certificate => /opt/kuin/ca.crt   client-certificate => /opt/kuin/etcd-client.crt  client-key => /opt/kuin/etcd-client.key
+ETCDCTL_API=3 etcdctl --endpoints 127.0.0.1:2379 --cacert=/opt/kuin/ca.crt --cert=/opt/kuin/etcd-client.crt --key=/opt/kuin/etcd-client.key snapshot save /var/lib/backup/etcd-snapshot.db
+
+# restore an existing, previous snapshot located at /var/lib/backup/etcd-snapshot-previous.db
+ls /var/lib
+mkdir -p /var/lib/new-etcd
+# make sure that etcd user owns it otherwise you need to become a root user and change owner permission then you need to restore db backup
+ls -la /var/lib/backup/etcd-snapshot-previous.db
+ETCDCTL_API=3 etcdctl snapshot restore --data-dir=/var/lib/new-etcd/ /var/lib/backup/etcd-snapshot-previous.db
+vi /etc/kubernetes/manifests/etcd.yaml
+    # - hostPath:
+    #    path: /var/lib/new-etcd/
+    #    type: DirectoryOrCreate
+    #   name: etcd-data
+    
+# take the backup of the ETCD at the location "/opt/etcd-backup.db" on the "controlplane" node
+export ETCDCTL_API=3
+etcdctl snapshot save --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --endpoint=127.0.0.1:2379 /opt/etcd-backup.db
+
+############################ Cluster Troubleshooting
+# a kubeconfig file called "admin.kubeconfig" has been created in /root/CKA . there is something wrong with the configuration. troubleshoot and fix it
+# make sure the port for kube-apiserver is correct. correct port number is "6443"
+k cluster-info --kubeconfig=/root/CKA/admin.kubeconfig
+vi /root/CKA/admin.kubeconfig  # change the kube-apiserver port to 6443
+
+# A Kubernetes worker node, named wk8s-node-0 is in state NotReady. Investigate why this is the case, and perform any appropriate steps to bring the node to a Ready state, 
+# ensuring that any changes are made permanent
+k config use-context wk8s 
+k get nodes 
+k describe nodes wk8s-node-0    # kubelet stopped sending status, Node status unknown
+ssh wk8s-node-0 
+sudo -i 
+# first step when kubelet stopped working is to restart it
+systemctl enable --now kubelet 
+systemctl restart kubelet
+# or
+systemctl start kubelet
+systemctl status kubelet 
+exit
+kubectl get nodes 
+
+# deploy a pod on node01 as per specifiction: name: web-pod | container-name: web | image: nginx   (there will be problems here related to cluster)
+k run web-pod --image=nginx --dry-run=client -o yaml > pod.yaml
+vi pod.yaml # change the container name
+k apply -f pod.yaml
+k get pods # we can see pods is in pending state
+k get nodes # node01 is NOT ready
+ssh node01
+systemctl status kubelet
+systemctl start kubelet  # ExecStart=/usr/bin/local/kubelet   => normally kubelet exec file should NOT be in local folder
+ls /usr/bin/local/kubelet   # does not exist
+vi /etc/systemd/system/kubelet.service.d/  # go to folder where kubelet executable is located at
+# edit this line
+ExecStart=/usr/bin/kubelet
+systemctl daemon-reload
+systemctl start kubelet
+
+# Set the node named ek8s-node-0 as unavailable and reschedule all the pods running on it.
+k get nodes
+k cordon ek8s-node-1
+k drain ek8s-node-1 --ignore-daemonsets
+# if above throws error
+k drain ek8s-node-1 --ignore-daemonsets --delete-emptydir-data
+# or
+kubectl drain ek8s-node-1 --ignore-daemonsets --force
+kubectl get nodes
+
+# mark the worker node named kworker and unschedulable and reschedule all the pods running on it
+k get pods -o wide # check if any pod is scheduled on kworker node
+k get nodes
+k drain kworker --ignore-daemonsets  # error due to using local volume
+k drain kworker --ignore-daemonsets --delete-emptydir-data
+kubectl get pods -o wide
+
+# Taint the worker node to be Unschedulable. Once done, create a pod called dev-redis, image redis:alpine to ensure workloads are not scheduled to this worker node. Finally, 
+# create a new pod called prod-redis and image redis:alpine with toleration to be scheduled on node01. 
+k get nodes -o wide
+k taint node node01 env_type=production:NoSchedule 
+k describe nodes node01 | grep -i taint 
+k run dev-redis --image=redis:alpine --dry-run=clinet -o yaml > pod-redis.yaml
+kubectl apply -f pod-redis.yaml 
+vi pod-redis.yaml
+    # apiVersion: v1 
+    # kind: Pod 
+    # metadata:
+    #   name: prod-redis  # edit here
+    # spec:
+    #   containers:
+    #   - name: prod-redis # edit here 
+    #     image: redis:alpine
+    #   add toleration here
+    #   tolerations:
+    #   - effect: Noschedule 
+    #     key: env_type 
+    #     operator: Equal 
+    #     value: prodcution
+
+kubectl create -f pod-redis.yaml 
+kubectl get pods -o wide 
+
+############################## custom json values
+# Check to see how many nodes are ready (not including nodes tainted NoSchedule) and write the number to /opt/KUSC00402/kusc00402.txt.
+echo $(k get nodes --no-headers | grep -v 'NoSchedule' | grep -c 'Ready' | wc -l ) > opt/KUSC00402/kusc00402.txt
+# or
+k get nodes -o=custom-columns=NodeName:.meta.name,TaintKey:.spec.taints[*].key,TaintValue:.spec.taints[*].value,TaintEffect:.spec.taints[*].effect # then manually add all ready ones to the file 
+
+# From the pod label name=overloaded-cpu, find pods running high CPU workloads and write the name of the pod consuming most CPU to the file /opt/KUTR00401/KUTR00401.txt (which already exists)
+k top pod -l name=overloaded-cpu --sort-by=cpu 
+echo "POD-NAME" >> /opt/KUTR00401/KUTR00401.txt  # >> adds it to the files and empties whatever was inside of it 
+
+# list all persistent volumes sorted by capacity, saving the full kubectl output to /opt/pv/pv_list.txt
+k get pv --sort-by=.spec.capacity.storage > /opt/pv/pv_list.txt
+
+##############################
+
 # You have been asked to create a new ClusterRole for a deployment pipeline and bind it to a specific ServiceAccount scoped to a specific namespace.
 # Create a new ClusterRole named deployment-clusterrole, which only allows to create the following resource types: Deployment, StatefulSet, DaemonSet
 # Create a new ServiceAccount named cicd-token in the existing namespace app-team1, Bind the new ClusterRole deployment-clusterrole to the new ServiceAccount cicd-token, limited to the namespace app-team1.
@@ -8,53 +165,10 @@ kubectl create clusterrolebinding deployment-clusterrolebinding --clusterrole=de
 kubectl auth can-i create deployment -n app-team1 --as system:serviceaccount:app-team1:cicd-token # yes
 kubectl auth can-i create daemonset -n app-team1 --as=system:serviceaccount                       # no
 
-# Set the node named ek8s-node-0 as unavailable and reschedule all the pods running on it.
-kubectl get nodes
-kubectl cordon ek8s-node-1
-kubectl drain ek8s-node-1 --ignore-daemonsets
-kubectl drain ek8s-node-1 --ignore-daemonsets --delete-eptydir-data
-# or
-kubectl drain ek8s-node-1 --ignore-daemonsets --force
-kubectl get nodes
 
-# Given an existing Kubernetes cluster running version 1.22.1, upgrade all of the Kubernetes control plane and node components on the master node only to version 1.22.2.
-# Be sure to drain the master node before upgrading it and uncordon it after the upgrade
-# You are also expected to upgrade kubelet and kubectl on the master node, do NOT upgrade the worker nodes, etcd, the containerv manager, the CNI plugins or the DNS service
-# You are also expected to upgrade kubelet and kubectl on the master node.
-kubectl config use-context mk8s
-kubectl cordon mk8s-master-0
-kubectl drain mk8s-master-0 --ignore-daemonsets
-kubectl get nodes
-ssh mk8s-master-0
-sudo -i
-sudo apt-mark unhold kubeadm && sudo apt-get update && sudo apt-get install -y kubeadm='1.32.x-*' && sudo apt-mark hold kubeadm
-kubeadm version
-sudo kubeadm upgrade plan
-sudo kubeadm upgrade apply v1.32.x --etcd-upgrade=false --skip-phases=addon/coredns
-sudo apt-mark unhold kubelet kubectl && sudo apt-get update && sudo apt-get install -y kubelet='1.32.x-*' kubectl='1.32.x-*' && sudo apt-mark hold kubelet kubectl
-sudo systemctl daemon-reload
-sudo systemctl restart kubelet
-exit
-kubectl uncordon mk8s-master-0
-kubectl get nodes
 
-# create a snapshot of the existing etcd instance running at https://127.0.0.1:2379, saving the snapshot to /var/lib/backup/etcd-snapshot.db
-# ca certificate => /opt/kuin/ca.crt   client certificate => /opt/kuin/etcd-client.crt  client-key => /opt/kuin/etcd-client.key
-# restore an existing, previous snapshot located at /var/lib/backup/etcd-snapshot-previous.db
-ETCDCTL_API=3 etcdctl --endpoints 127.0.0.1:2379 --cacert=/opt/kuin/ca.crt --cert=/opt/kuin/etcd-client.crt --key=/opt/kuin/etcd-client.key snapshot save /var/lib/backup/etcd-snapshot.db
 
-ls /var/lib
-mkdir -p /var/lib/new-etcd
-ls -la /var/lib/backup/etcd-snapshot-previous.db
-# make sure that etcd user owns it otherwise you need to be a root user and change owner permission then you need to restore db backup
-ETCDCTL_API=3 etcdctl --endpoints 127.0.0.1:2379 --cacert=/opt/kuin/ca.crt --cert=/opt/kuin/etcd-client.crt --key=/opt/kuin/etcd-client.key snapshot restore --data-dir=/var/lib/new-etcd/ /var/lib/backup/etcd-snapshot-previous.db
 
-vi /etc/kubernetes/manifests/etcd.yaml
-
-    - hostPath:
-    path: /var/lib/new-etcd/
-    type: DirectoryOrCreate
-    name: etcd-data
 
 # Schedule a pod as follows:  Name: nginx-kusc00401,  Image: nginx,  Node selector: disk=ssd
 kubectl get nodes -o wide --show-labels | grep -i disk=ssd 
@@ -80,108 +194,13 @@ vi pod.yaml
 
 kubectl apply -f pod.yaml
 
-
-# Check to see how many nodes are ready (not including nodes tainted NoSchedule) and write the number to /opt/KUSC00402/kusc00402.txt.
-echo $(kubectl get nodes --no-headers | grep -v 'NoSchedule' | grep -c 'Ready' | wc -l ) > opt/KUSC00402/kusc00402.txt
-# or
-kubectl get nodes -o=custom-columns=NodeName:.meta.name,TaintKey:.spec.taints[*].key,TaintValue:.spec.taints[*].value,TaintEffect:.spec.taints[*].effect 
-
-
 # Monitor the logs of pod foo and: Extract log lines corresponding to error file-not-found, Write them to /opt/KUTR00101/foo 
 kubectl config use-context k8s
 kubectl get pods
 kubectl logs foo | grep "error file-not-found" > /opt/KUTR00101/foo
 
 
-# From the pod label name=overloaded-cpu, find pods running high CPU workloads and write the name of the pod consuming most CPU to the file /opt/KUTR00401/KUTR00401.txt (which already exists)
-kubectl top pod -l name=overloaded-cpu --sort-by=cpu 
-echo "POD-NAME" >> /opt/KUTR00401/KUTR00401.txt  # >> adds it to the files and empties whatever was inside of it 
 
-
-# A Kubernetes worker node, named wk8s-node-0 is in state NotReady. Investigate why this is the case, and perform any appropriate steps to bring the node to a Ready state, ensuring that any changes are made permanent
-kubectl config use-context wk8s 
-kubectl get nodes 
-kubectl describe nodes wk8s-node-0    # kubelet stopped sending status, Node status unknown
-ssh wk8s-node-0 
-sudo -i 
-systemctl enable --now kubelet 
-systemctl restart kubelet
-systemctl status kubelet 
-exit
-kubectl get nodes 
-
-
-# Taint the worker node to be Unschedulable. Once done, create a pod called dev-redis, image redis:alpine to ensure workloads are not scheduled to this worker node. Finally, create a new pod called prod-redis and image 
-# redis:alpine with toleration to be scheduled on node01. Finally, create a new pod called prod-redis and image redis:alpine with toleration to be scheduled on node01.
-kubectl get nodes
-kubectl taint node node01 env_type=production:NoSchedule 
-kubectl describe nodes node01 | grep -i taint 
-kubectl run dev-redis --image=redis:alpine --dry-run=clinet -o yaml > pod-redis.yaml
-kubectl apply -f pod-redis.yaml 
-vi pod-redis.yaml
-
-    apiVersion: v1 
-    kind: Pod 
-    metadata:
-      name: prod-redis  # edit here
-    spec:
-      containers:
-      - name: prod-redis # edit here 
-        image: redis:alpine
-      # edit here
-      tolerations:
-      - effect: Noschedule 
-        key: env_type 
-        operator: Equal 
-        value: prodcution
-
-kubectl create -f pod-redis.yaml 
-kubectl get pods -o wide 
-
-
-# join node01 worker node to cluster and you have to deploy pod on the node01, pod name should be web and image should be nginx
-kubectl get nodes
-ssh controlplane # in case we are not on master node
-kubeadm token create --print-join-command  # save the command and use it on node01
-ssh node01
-kubeadm join 172.30.1.2:6443 --token TOKEN --discovery-token-ca-cert-hash CERT-HASH
-# if there is any error here check the kubelet
-systemctl status kubelet
-systemctl start kubelet
-systemctl status kubelet
-exit
-kubectl get nodes
-kubectl run web --image=nginx
-kubectl get pods
-
-
-# deploy a pod on node01 as per specifiction: name: web-pod | container-name: web | image: nginx   (there will be problems here related to cluster)
-kubectl run web-pod --image=nginx --dry-run=client -o yaml > pod.yaml
-vi pod.yaml # chage the container name
-kubectl apply -f pod.yaml
-kubectl get pods # we can see pods is in pending state
-kubectl get nodes # node01 is NOT ready
-ssh node01
-systemctl status kubelet
-systemctl start kubelet  # ExecStart=/usr/bin/local/kubelet   => normally kubelet exec file should NOT be in local folder
-ls /usr/bin/local/kubelet   # does not exist
-vi /etc/systemd/system/kubelet.service.d/
-# edit this line
-ExecStart=/usr/bin/kubelet
-systemctl daemon-reload
-systemctl start kubelet
-
-
-# mark the worker node named kworker and unschedulable and reschedule all the pods running on it
-kubectl get pods -o wide # check if any pod is scheduled on kworker node
-kubectl get nodes
-kubectl drain kworker --ignore-daemonsets  # error due to using local volume
-kubectl drain kworker --ignore-daemonsets --delete-emptydir-data
-kubectl get pods -o wide
-
-
-# list all persistent volumes sorted by capacity, saving the full kubectl output to /opt/pv/pv_list.txt
-kubectl get pv --sort-by=.spec.capacity.storage > /opt/pv/pv_list.txt
 
 
 # Create a new NetworkPolicy named allow-port-from-namespace in the existing namespace fubar. Ensure that the new NetworkPolicy allows Pods in namespace internal to connect to port 9000 of Pods in namespace fubar.
@@ -790,14 +809,10 @@ cat /opt/toppods.yaml
 
 
 #########################################################
-### take the backup of the ETCD at the location "/opt/etcd-backup.db" on the "controlplane" node
-export ETCDCTL_API=3
-etcdctl snapshot save --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --endpoint=127.0.0.1:2379 /opt/etcd-backup.db
 
 
-### a kubeconfig file called "admin.kubeconfig" has been created in /root/CKA . there is something wrong with the configuration. troubleshoot and fix it
-# make sure the port for kube-apiserver is correct. correct port number is "6443"
-kubectl cluster-info --kubeconfig /root/CKA/admin.kubeconfig
+
+
 
 
 ### print name of all deployments in admin2406 namespace
