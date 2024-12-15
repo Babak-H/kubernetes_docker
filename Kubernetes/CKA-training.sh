@@ -726,7 +726,62 @@ apply -f np.yaml
 # create a new pv called web-pv with capacity 2Gi, accessMode ReadWriteOnce, hostPath /vol/data and no storageclass
 # create a pvc in ns production named web-pvc. it requests 2Gi storage, accessMode ReadWriteOnce and no storageclass. should be bound to web-pv.
 # create a deployment in production namespace called web-deploy that mounts volume at /tmp/web-data, it's pods have image nginx:1.14.2 and it has 3 replicas
+# ---
+# apiVersion: v1
+# kind: PersistentVolume
+# metadata:
+#   name: web-pv
+# spec:
+#   capacity:
+#     storage: 2Gi
+#   accessModes:
+#     - ReadWriteOnce
+#   persistentVolumeReclaimPolicy: Retain
+#   hostPath:
+#     path: /vol/data
+#   storageClassName: ""
+  
+# ---
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: web-pvc
+#   namespace: production
+# spec:
+#   resources:
+#     requests:
+#       storage: 2Gi
+#   accessModes:
+#     - ReadWriteOnce
+#   storageClassName: ""
 
+k create deploy web-deploy --image=nginx:1.14.2 --replicas=3 --dry-run=client -o yaml > deploy.yaml
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: web-deploy
+#   namespace: production
+# spec:
+#   replicas: 3
+#   selector:
+#     matchLabels:
+#       app: web
+#   template:
+#     metadata:
+#       labels:
+#         app: web
+#     spec:
+#       volumes:
+#         - name: web-volume
+#           persistentVolumeClaim: 
+#             claimName: web-pvc
+#       containers:
+#         - name: nginx
+#           image: nginx:1.14.2
+#           volumeMounts:
+#             - mountPath: /tmp/web-data
+#               name: web-volume
 
 # find pods with label app=mysql that are executing high cpu workloads and write name of pod consuming the most cpu to file /opt/toppods.yaml
 k top pods -l app=mysql --sort-by=cpu
