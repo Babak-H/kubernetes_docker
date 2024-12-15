@@ -681,3 +681,77 @@ k get ds -n project1 -o wide
 k top pods -l app=mysql --sort-by=cpu
 echo 'mysql-deployment-77fgf-345' >> /opt/toppods.yaml
 cat /opt/toppods.yaml
+
+
+#########################################################
+### take the backup of the ETCD at the location "/opt/etcd-backup.db" on the "controlplane" node
+export ETCDCTL_API=3
+etcdctl snapshot save --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --endpoint=127.0.0.1:2379 /opt/etcd-backup.db
+
+
+### a kubeconfig file called "admin.kubeconfig" has been created in /root/CKA . there is something wrong with the configuration. troubleshoot and fix it
+# make sure the port for kube-apiserver is correct. correct port number is "6443"
+kubectl cluster-info --kubeconfig /root/CKA/admin.kubeconfig
+
+
+### print name of all deployments in admin2406 namespace
+# order: <deployment-name> <container-image> <readt-replica-count> <namespace>
+kubectl -n admin2406 get deployment -o custom-columns=DEPLOYMENT:.metadata.name, \
+                                       CONTAINER_IMAGE:.spec.template.spec.containers[*].image, \
+                                       READY_REPLICAS: .status.readyReplicas, \
+                                       NAMESPACE: .metadata.namespace \
+                                       --sort-by=.metadata.name > /opt/admin2406_data
+
+
+### A new deployment called 'alpha-mysql' has been deployed in the 'alpha' namespace. However, the pods are not running. Troubleshoot and fix the issue. The deployment should make use of the 
+# persistent volume 'alpha-pv' to be mounted at /'var/lib/mysql' and should use the environment variable 'MYSQL_ALLOW_EMPTY_PASSWORD=1' to make use of an empty root password. Do NOT alter the persistent volume.
+kubectl describe alpha-mysql -n alpha  # its correct
+kubectl describe pv alpha-pv # its correct
+kubectl get pvc -n alpha # we have no pvc to bound the pv to deployment, create it in the namespace
+vi pvc-alpha.yaml
+# apiVersion: v1
+# kind: PersistentVolumeClaim 
+# metadata:
+#   name: mysql-alpha-pvc
+#   namespace: alpha # same ns as the deployment
+# spec:
+#   accessModes: # should be same as the one on pv
+#   - ReadWriteOnce
+#   resources:
+#     requests:
+#       storage: 1Gi #same or smaller than pv
+#   storageClassName: slow # same class as pv
+
+kubectl apply -f pvc-alpha.yaml
+kubectl get deployment -n alpha
+kubectl get pv
+
+
+### Create a pod called 'secret-1401' in the 'admin1401' namespace using the 'busybox' image. The container within the pod should be called 'secret-admin' and should 'sleep' for '4800' seconds.
+# The container should mount a 'read-only secret volume' called 'secret-volume' at the path '/etc/secret-volume'. The secret being mounted has already been created for you and is called 'dotfile-secret'
+kubectl run secret-1401 -n admin1401 --image=busybox --dry-run=client -o yaml --command -- sleep 4800 > admin.yaml
+vi admin.yaml
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: secret-1401
+#   namespace: admin1401
+#   labels:
+#     run: secret-1401
+# spec:
+#   volumes:
+#   - name: secret-volume
+#     secret:
+#       secretName: dotfile-secret
+#   containers:
+#   - name: secret-admin
+#     image: busybox
+#     command:
+#     - sleep
+#     - "4800"
+#     volumeMounts:
+#     - name: secret-volume
+#       readOnly: true
+#       mountPath: "/etc/secret-volume"
+
+kubectl apply -f admin.yaml
