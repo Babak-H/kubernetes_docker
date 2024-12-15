@@ -669,12 +669,63 @@ k get ds -n project1 -o wide
 
 # create a new serviceAccount "gitops" in namespace "project-1" create role and rolebinding both named "gitops-role" and "gitops-rolebinding". allows the SA 
 # to create secrets and configmaps in the namespace
+k create serviceaccount gitops -n project-1
+k create role gitops-role -n project-1 --verb=create --resources=secrets,configmpas
+k create rolebinding gitops-rolebinding -n project-1 --role=gitops-role --serviceaccount=project-1:gitops
 
 
 # create a pod "web-pod" using image "nginx" with a limit 0.5cpu and 200Mi memory and resource request of 0.1 cpu and 100 mi memory in develop namespace
+k run web-pod -n develop --dry-run=client -o yaml > pod.yaml
+# vi pod.yaml
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: web-pod
+#   namespace: develop
+# spec:
+#   containers:
+#   - image: nginx
+#     name: nginx
+#     resources:
+#       requests:
+#         cpu: "100m"
+#         memory: "100Mi"
+#       limits:
+#         cpu: "500m"
+#         memory: "200Mi"
 
+k apply -f pod.yaml
+k get po -n develop
 
 # you have a cluster with pods in many namespaces. "db pods" in project-a namespace should only be acceesible from "service pods" that are running in project-b namespace => create networkPolicy
+k get po -n project-a --show-labels
+k get po -n project-b --show-labels
+vi np.yaml
+# apiVersion: networking.k8s.io/v1
+# kind: NetworkPolicy
+# metadata:
+#   name: allow-service-to-db
+#   namespace: project-a
+#   spec:
+#     podSelector:
+#       matchLabels:
+#         app: db # Assuming your db pods have a label "app=db"
+#     PolicyTypes:
+#       - Ingress
+#     ingress:
+#       - from:
+#           - namespaceSelector:
+#             matchLabels:
+#               name: project-b  # Allow access from project-b namespace
+#           - podSelector:
+#               matchLabels:
+#                 app: service  # Allow access from pods with label app=service in project-b namespace
+
+apply -f np.yaml
+
+# create a new pv called web-pv with capacity 2Gi, accessMode ReadWriteOnce, hostPath /vol/data and no storageclass
+# create a pvc in ns production named web-pvc. it requests 2Gi storage, accessMode ReadWriteOnce and no storageclass. should be bound to web-pv.
+# create a deployment in production namespace called web-deploy that mounts volume at /tmp/web-data, it's pods have image nginx:1.14.2 and it has 3 replicas
 
 
 # find pods with label app=mysql that are executing high cpu workloads and write name of pod consuming the most cpu to file /opt/toppods.yaml
