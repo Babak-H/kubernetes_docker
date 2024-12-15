@@ -441,9 +441,9 @@ kubectl exec busybox -- ip route
 # install container runtime (containerd) *********
 # Enanble IPV4 packet forwarding
 # sysctl params required by setup, params persists across reboots:
-cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
-net.ipv4.ip_forward =1
-EOF
+# cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+# net.ipv4.ip_forward =1
+# EOF
 
 # apply sysctl params without reboot
 sudo sysctl --system
@@ -825,7 +825,7 @@ k get svc -n triton
       # mysql         ClusterIP   10.100.190.141   <none>        3306/TCP         2m33s
       # web-service   NodePort    10.111.38.4      <none>        8080:30081/TCP   2m33s
 
-kubectl get po -n kube-system
+k get po -n kube-system
     # NAME                                   READY   STATUS    RESTARTS   AGE
     # coredns-6f6b679f8f-mtxzv               1/1     Running   0          33m
     # coredns-6f6b679f8f-qh272               1/1     Running   0          33m
@@ -835,7 +835,7 @@ kubectl get po -n kube-system
     # kube-proxy-smg6m                       1/1     Running   0          33m
     # kube-scheduler-controlplane            1/1     Running   0          33m
 
-kubectl logs -n kube-system kube-proxy-smg6m
+k logs -n kube-system kube-proxy-smg6m
       # server_linux.go:66] "Using iptables proxy"
       # server.go:677] "Successfully retrieved node IP(s)" IPs=["192.168.121.133"]
       # conntrack.go:121] "Set sysctl" entry="net/netfilter/nf_conntrack_max" value=131072
@@ -866,7 +866,7 @@ curl -L https://github.com/weaveworks/weave/releases/download/latest_release/wea
 # The same 2 tier application is having issues again. It must display a green web page on success. Click on the app tab at the top of your terminal to view your application. It is currently failed. Troubleshoot and fix the issue.
 # Error: Environment Variables: DB_Host=mysql; DB_Database=Not Set; DB_User=root; DB_Password=paswrd; 2003: Can't connect to MySQL server on 'mysql:3306' (111 Connection refused)
 
-kubectl get po -A
+k get po -A
     # NAMESPACE     NAME                                   READY   STATUS             RESTARTS        AGE
     # kube-system   coredns-6f6b679f8f-mtxzv               1/1     Running            0               58m
     # kube-system   coredns-6f6b679f8f-qh272               1/1     Running            0               58m
@@ -879,10 +879,10 @@ kubectl get po -A
     # triton        mysql                                  1/1     Running            4 (52s ago)     22m
     # triton        webapp-mysql-d89894b4b-hrt4v           1/1     Running            2 (9m22s ago)   22m
 
-kubectl logs -n kube-system kube-proxy-24rmj
+k logs -n kube-system kube-proxy-24rmj
     # run.go:74] "command failed" err="failed complete: open /var/lib/kube-proxy/configuration.conf: no such file or directory"
 
-kubectl get cm kube-proxy -n kube-system -o yaml
+k get cm kube-proxy -n kube-system -o yaml
     # apiVersion: v1
     # data:
     #   config.conf: |-
@@ -898,8 +898,7 @@ kubectl get cm kube-proxy -n kube-system -o yaml
     #     clusterCIDR: 10.244.0.0/16
     #     configSyncPeriod: 0s
 
-kubectl get daemonset kube-proxy -n kube-system -o yaml
-
+k get ds kube-proxy -n kube-system -o yaml
       # apiVersion: apps/v1
       # kind: DaemonSet
       # metadata:
@@ -924,25 +923,23 @@ kubectl get daemonset kube-proxy -n kube-system -o yaml
 
 kubectl edit daemonset kube-proxy -n kube-system
 
-
+## JSON output
 # Get the list of nodes in JSON format and store it in a file at /opt/outputs/nodes.json
-kubectl get nodes -o json > /opt/outputs/nodes.json
+k get nodes -o json > /opt/outputs/nodes.json
 
 # Get the details of the node node01 in json format and store it in the file /opt/outputs/node01.json
-kubectl get node node01 -o json > /opt/outputs/node01.json
+k get node node01 -o json > /opt/outputs/node01.json
 
 # Use JSON PATH query to fetch node names and store them in /opt/outputs/node_names.txt
-kubectl get nodes -o=jsonpath='{.items[*].metadata.name}' > /opt/outputs/node_names.txt
+k get nodes -o=jsonpath='{.items[*].metadata.name}' > /opt/outputs/node_names.txt
 
 # Use JSON PATH query to retrieve the osImages of all the nodes and store it in a file /opt/outputs/nodes_os.txt
-kubectl get nodes -o=jsonpath='{.items[*].status.nodeinfo.osImage}' > /opt/outputs/node_os.txt
+k get nodes -o=jsonpath='{.items[*].status.nodeinfo.osImage}' > /opt/outputs/node_os.txt
 
 # A kube-config file is present at /root/my-kube-config. Get the user names from it and store it in a file /opt/outputs/users.txt
-kubectl config view --kubeconfig=/root/my-kube-config
-kubectl config view --kubeconfig=/root/my-kube-config -o json
-kubectl config view --kubeconfig=/root/my-kube-config -o=jsonpath='{.users[*].name}' > /opt/outputs/users.txt
-
-
+k config view --kubeconfig=/root/my-kube-config
+k config view --kubeconfig=/root/my-kube-config -o json
+k config view --kubeconfig=/root/my-kube-config -o=jsonpath='{.users[*].name}' > /opt/outputs/users.txt
 
 ### Upgrade the current version of kubernetes from 1.30.0 to 1.31.0 exactly using the kubeadm utility. Make sure that the upgrade is carried out one node at a time starting with the controlplane node. 
 # To minimize downtime, the deployment gold-nginx should be rescheduled on an alternate node before upgrading each node.
@@ -964,11 +961,11 @@ systemctl daemon-reload
 systemctl restart kubelet
 kubectl uncordon controlplane
 # Before draining node01, if the controlplane gets taint during an upgrade, we have to remove it.
-kubectl describe node controlplane | grep -i taint
-kubectl taint node controlplane node-role.kubernetes.io/control-plane:NoSchedule-
-kubectl describe node controlplane | grep -i taint
+k describe node controlplane | grep -i taint
+k taint node controlplane node-role.kubernetes.io/control-plane:NoSchedule-
+k describe node controlplane | grep -i taint
 # drain and upgrade node01
-kubectl drain node01 --ignore-daemonsets
+k drain node01 --ignore-daemonsets
 # SSH to the node01 and perform the below steps as follows: -
 vi /etc/apt/source.list.d/kubernetes.list
 deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.kBs.10/core:/stable:/v1.31/deb/ /
@@ -981,8 +978,8 @@ apt-get install kubelet=1.31.0-1.1
 systemctl daemon-reload
 systemctl restart kubelet
 # exit back to controlplane node
-kubectl uncordon node01
-kubectl get pods -o wide | grep gold # make sure this is scheduled on a node
+k uncordon node01
+k get pods -o wide | grep gold # make sure this is scheduled on a node
 
 # isntall docker on nodes for kubertnets installation
 sudo apt-get update
@@ -993,550 +990,3 @@ sudo apt-get update
 sudo apt-get install -y docker-ce
 sudo systemctl status docker
 sudo docker run hello-world
-
-
-# ask chatgpt: kube-schduler only connects to kube-api server. does it need to have a private key certificate file? if yes why?
-# please visualize it with an image/diagram
-
-#//////////////////////////////////////////////////////////////////////////////
-# identify the "certificate" file used for the kube-api-server
-cat /etc/kubernetes/manifests/kube-apiserver.yaml | grep tls-cert-file
-                # --tls-cert-file=/etc/kubernetes/pki/apiserver.crt
-
-# Identify the "Certificate" file used to authenticate kube-apiserver as a client to ETCD Server
-cat/etc/kubernetes/manifests/kube-apiserver.yaml | grep etcd-certfile
-                # - --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt
-
-# Identify the "key" used to authenticate kubeapi-server to the kubelet server
-cat/etc/kubernetes/manifests/kube-apiserver.yaml | grep kubelet-client-key
-                # - --kubelet-client-key=/etc/kubernetes/pki/apiserver-kubelet-client.key
-
-# Identify the ETCD Server Certificate used to host ETCD server.
-cat /etc/kubernetes/manifests/etcd.yaml | grep cert-file
-                # - --cert-file=/etc/kubernetes/pki/etcd/server.crt
-
-# Identify the ETCD Server CA Root Certificate used to serve ETCD Server
-# ETCD can have its own CA. So this may be a different CA certificate than the one used by kube-api server.
-cat /etc/kubernetes/manifests/etcd.yaml | grep trusted-ca-file
-                # - --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt
-
----
-      apiVersion: v1
-      kind: Pod
-      metadata:
-        name: kube-apiserver
-        namespace: kube-system
-        labels:
-          component: kube-apiserver
-      spec:
-        # Node selector to ensure the pod runs on the master node
-        nodeSelector:
-          node-role.kubernetes.io/master: ""
-
-        # Containers section defines the kube-apiserver container
-        containers:
-        - name: kube-apiserver
-          image: k8s.gcr.io/kube-apiserver:v1.22.0
-          command:
-          - kube-apiserver
-          # Flags for configuring the API server
-          - --advertise-address=192.168.0.1
-          - --allow-privileged=true
-          - --authorization-mode=Node,RBAC
-          - --client-ca-file=/etc/kubernetes/pki/ca.crt
-          - --enable-admission-plugins=NodeRestriction
-          - --etcd-servers=https://127.0.0.1:2379
-          - --etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt
-          - --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt
-          - --etcd-keyfile=/etc/kubernetes/pki/apiserver-etcd-client.key
-          - --kubelet-client-certificate=/etc/kubernetes/pki/apiserver-kubelet-client.crt
-          - --kubelet-client-key=/etc/kubernetes/pki/apiserver-kubelet-client.key
-          - --service-account-key-file=/etc/kubernetes/pki/sa.pub
-          - --service-cluster-ip-range=10.96.0.0/12
-          - --tls-cert-file=/etc/kubernetes/pki/apiserver.crt
-          - --tls-private-key-file=/etc/kubernetes/pki/apiserver.key
-          ports:
-          - containerPort: 6443
-            hostPort: 6443
-            name: https
-          volumeMounts:
-          # Mounting necessary certificates and keys
-          - mountPath: /etc/kubernetes/pki
-            name: pki
-            readOnly: true
-        # Volumes section for mounting certificates and keys
-        volumes:
-        - name: pki
-          hostPath:
-            path: /etc/kubernetes/pki
-            type: DirectoryOrCreate
-        # Security context to run the container as a non-root user
-        securityContext:
-          runAsUser: 1000
-          runAsGroup: 3000
-          fsGroup: 2000
-
-# Node Selector: Ensures that the kube-apiserver pod runs on a node labeled as a master node.
-# Containers: Defines the container that runs the kube-apiserver binary. The command section includes various flags to configure the API server, such as authentication, authorization, and connection to the etcd database.
-# Ports: Specifies the ports that the API server listens on, both inside the container and on the host.
-# Volume Mounts and Volumes: These sections are used to mount necessary certificates and keys into the container, which are required for secure communication.
-# Security Context: Specifies the user and group IDs under which the container should run, enhancing security by avoiding running as the root user.
-# This is a basic example and may need to be adjusted based on your specific Kubernetes setup and version.
-
-
----
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: kube-scheduler
-      namespace: kube-system
-      labels:
-        component: kube-scheduler
-    spec:
-      # Node selector to ensure the pod runs on the master node
-      nodeSelector:
-        node-role.kubernetes.io/master: ""
-
-      # Containers section defines the kube-scheduler container
-      containers:
-      - name: kube-scheduler
-        image: k8s.gcr.io/kube-scheduler:v1.22.0
-        command:
-        - kube-scheduler
-        # Flags for configuring the scheduler
-        - --kubeconfig=/etc/kubernetes/scheduler.conf
-        - --leader-elect=true
-        - --bind-address=127.0.0.1
-        ports:
-        - containerPort: 10251
-          hostPort: 10251
-          name: http
-        volumeMounts:
-        # Mounting the kubeconfig file for the scheduler
-        - mountPath: /etc/kubernetes
-          name: kubeconfig
-          readOnly: true
-
-      # Volumes section for mounting the kubeconfig file
-      volumes:
-      - name: kubeconfig
-        hostPath:
-          path: /etc/kubernetes
-          type: DirectoryOrCreate
-
-      # Security context to run the container as a non-root user
-      securityContext:
-        runAsUser: 1000
-        runAsGroup: 3000
-        fsGroup: 2000
-
-# Node Selector: Ensures that the kube-scheduler pod runs on a node labeled as a master node.
-# Containers: Defines the container that runs the kube-scheduler binary. The command section includes flags to configure the scheduler, such as specifying the kubeconfig file for cluster access and enabling leader election for high availability.
-# Ports: Specifies the ports that the scheduler listens on, both inside the container and on the host. The default port for the scheduler is 10251.
-# Volume Mounts and Volumes: These sections are used to mount the kubeconfig file into the container, which is required for the scheduler to communicate with the Kubernetes API server.
-# Security Context: Specifies the user and group IDs under which the container should run, enhancing security by avoiding running as the root user.
-
----
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: kube-controller-manager
-      namespace: kube-system
-      labels:
-        component: kube-controller-manager
-    spec:
-      # Node selector to ensure the pod runs on the master node
-      nodeSelector:
-        node-role.kubernetes.io/master: ""
-
-      # Containers section defines the kube-controller-manager container
-      containers:
-      - name: kube-controller-manager
-        image: k8s.gcr.io/kube-controller-manager:v1.22.0
-        command:
-        - kube-controller-manager
-        # Flags for configuring the controller manager
-        - --kubeconfig=/etc/kubernetes/controller-manager.conf
-        - --service-account-private-key-file=/etc/kubernetes/pki/sa.key
-        - --root-ca-file=/etc/kubernetes/pki/ca.crt
-        - --leader-elect=true
-        - --allocate-node-cidrs=true
-        - --cluster-cidr=10.244.0.0/16
-        ports:
-        - containerPort: 10252
-          hostPort: 10252
-          name: http
-        volumeMounts:
-        # Mounting necessary configuration and key files
-        - mountPath: /etc/kubernetes
-          name: kubeconfig
-          readOnly: true
-        - mountPath: /etc/kubernetes/pki
-          name: pki
-          readOnly: true
-      # Volumes section for mounting configuration and key files
-      volumes:
-      - name: kubeconfig
-        hostPath:
-          path: /etc/kubernetes
-          type: DirectoryOrCreate
-      - name: pki
-        hostPath:
-          path: /etc/kubernetes/pki
-          type: DirectoryOrCreate
-      # Security context to run the container as a non-root user
-      securityContext:
-        runAsUser: 1000
-        runAsGroup: 3000
-        fsGroup: 2000
-
-# Node Selector: Ensures that the kube-controller-manager pod runs on a node labeled as a master node.
-# Containers: Defines the container that runs the kube-controller-manager binary. The command section includes flags to configure the controller manager, such as specifying the kubeconfig file for cluster access, service account key files, and enabling leader election for high availability.
-# Ports: Specifies the ports that the controller manager listens on, both inside the container and on the host. The default port for the controller manager is 10252.
-# Volume Mounts and Volumes: These sections are used to mount necessary configuration and key files into the container, which are required for the controller manager to communicate with the Kubernetes API server and manage resources.
-# Security Context: Specifies the user and group IDs under which the container should run, enhancing security by avoiding running as the root user.
-
----
-    apiVersion: apps/v1
-    kind: DaemonSet
-    metadata:
-      name: kube-proxy
-      namespace: kube-system
-      labels:
-        k8s-app: kube-proxy
-    spec:
-      selector:
-        matchLabels:
-          k8s-app: kube-proxy
-      template:
-        metadata:
-          labels:
-            k8s-app: kube-proxy
-        spec:
-          # Service account for kube-proxy
-          serviceAccountName: kube-proxy
-
-          # Containers section defines the kube-proxy container
-          containers:
-          - name: kube-proxy
-            image: k8s.gcr.io/kube-proxy:v1.22.0
-            command:
-            - /usr/local/bin/kube-proxy
-            # Flags for configuring kube-proxy
-            - --config=/var/lib/kube-proxy/config.conf
-            securityContext:
-              privileged: true
-            volumeMounts:
-            # Mounting necessary configuration files
-            - mountPath: /var/lib/kube-proxy
-              name: kube-proxy
-            - mountPath: /etc/ssl/certs
-              name: ssl-certs
-              readOnly: true
-          # Volumes section for mounting configuration files
-          volumes:
-          - name: kube-proxy
-            configMap:
-              name: kube-proxy
-          - name: ssl-certs
-            hostPath:
-              path: /etc/ssl/certs
-              type: Directory
-          # Tolerations to allow kube-proxy to run on all nodes
-          tolerations:
-          - operator: Exists
-
-# DaemonSet: Ensures that a kube-proxy pod runs on each node in the cluster.
-# Service Account: Specifies the service account under which the kube-proxy runs. This is necessary for accessing the Kubernetes API.
-# Containers: Defines the container that runs the kube-proxy binary. The command section includes flags to configure kube-proxy, such as specifying the configuration file.
-# Security Context: The privileged flag is set to true to allow kube-proxy to modify network settings on the host.
-# Volume Mounts and Volumes: These sections are used to mount necessary configuration files and SSL certificates into the container. The configuration is typically provided via a ConfigMap.
-# Tolerations: Allows the kube-proxy to run on all nodes, including those with taints, by tolerating all taints with the Exists operator.
-
----
-
-
-kubectl describe po etcd-controlplane -n kube-system | grep -i '\--listen-clients-urls'
-kubectl describe po etcd-controlplane -n kube-system | grep -i '\--cert-file'
-kubectl describe po etcd-controlplane -n kube-system | grep -i '\--peer-cert-file'
-kubectl describe po etcd-controlplane -n kube-system | grep -i '\--trusted-ca'
-
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: etcd
-      namespace: kube-system
-      labels:
-        component: etcd
-    spec:
-      # Node selector to ensure the pod runs on the master node
-      nodeSelector:
-        node-role.kubernetes.io/master: ""
-      # Containers section defines the etcd container
-      containers:
-      - name: etcd
-        image: quay.io/coreos/etcd:v3.5.0
-        command:
-        - /usr/local/bin/etcd
-        # Flags for configuring etcd
-        - --name=etcd0
-        - --data-dir=/var/lib/etcd
-        - --listen-client-urls=https://0.0.0.0:2379
-        - --advertise-client-urls=https://0.0.0.0:2379
-        - --listen-peer-urls=https://0.0.0.0:2380
-        - --initial-advertise-peer-urls=https://0.0.0.0:2380
-        - --initial-cluster=etcd0=https://0.0.0.0:2380
-        - --initial-cluster-state=new
-        - --client-cert-auth=true
-        - --trusted-ca-file=/etc/etcd/pki/ca.crt
-        - --cert-file=/etc/etcd/pki/etcd.crt
-        - --key-file=/etc/etcd/pki/etcd.key
-        ports:
-        - containerPort: 2379
-          name: client
-        - containerPort: 2380
-          name: peer
-        volumeMounts:
-        # Mounting necessary data and certificate files
-        - mountPath: /var/lib/etcd
-          name: etcd-data
-        - mountPath: /etc/etcd/pki
-          name: etcd-certs
-          readOnly: true
-      # Volumes section for mounting data and certificate files
-      volumes:
-      - name: etcd-data
-        hostPath:
-          path: /var/lib/etcd
-          type: DirectoryOrCreate
-      - name: etcd-certs
-        hostPath:
-          path: /etc/etcd/pki
-          type: DirectoryOrCreate
-      # Security context to run the container as a non-root user
-      securityContext:
-        runAsUser: 1000
-        runAsGroup: 3000
-        fsGroup: 2000
-
-# Node Selector: Ensures that the etcd pod runs on a node labeled as a master node.
-# Containers: Defines the container that runs the etcd binary. The command section includes flags to configure etcd, such as specifying the node name, data directory, and network settings for client and peer communication.
-# Ports: Specifies the ports that etcd listens on for client and peer communication.
-# Volume Mounts and Volumes: These sections are used to mount necessary data directories and certificate files into the container. The data directory is where etcd stores its data, and the certificates are used for secure communication.
-# Security Context: Specifies the user and group IDs under which the container should run, enhancing security by avoiding running as the root user.
-
----
-k describe cm kube-proxy -n kube-system | grep clusterCIDR
-# clusterCIDR: 10.244.0.0/16
-
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: kube-proxy
-  namespace: kube-system
-  labels:
-    component: kube-proxy
-    tier: node
-data:
-  config.conf: |
-    apiVersion: kubeproxy.config.k8s.io/v1alpha1
-    kind: KubeProxyConfiguration
-
-    # Proxy mode: choose between 'iptables' or 'ipvs'
-    mode: "iptables"
-    # CIDR range for the cluster's pod network
-    clusterCIDR: "10.244.0.0/16"
-    clientConnection:
-      # Path to the kubeconfig file for API server connection
-      kubeconfig: "/var/lib/kube-proxy/kubeconfig.conf"
-    iptables:
-      # Whether to masquerade all traffic
-      masqueradeAll: false
-      # Bit of the iptables mark space to use for SNAT
-      masqueradeBit: 14
-      # Minimum interval between iptables rule syncs
-      minSyncPeriod: "0s"
-      # Interval between full iptables rule syncs
-      syncPeriod: "30s"
-    ipvs:
-      # Minimum interval between IPVS rule syncs
-      minSyncPeriod: "0s"
-      # IPVS scheduler (e.g., 'rr' for round-robin)
-      scheduler: "rr"
-      # Interval between full IPVS rule syncs
-      syncPeriod: "30s"
-    # Address and port for the metrics server
-    metricsBindAddress: "0.0.0.0:10249"
-    # IP addresses to use for NodePort services
-    nodePortAddresses:
-      - "0.0.0.0/0"
-    # Adjusts the OOM score for the kube-proxy process
-    oomScoreAdj: -999
-    # Port range for NodePort services
-    portRange: ""
-    # Timeout for UDP connections
-    udpIdleTimeout: "250ms"
-    winkernel:
-      # Enable Direct Server Return (DSR) on Windows
-      enableDSR: false
-      # Name of the network for Windows
-      networkName: ""
-      # Source VIP for Windows
-      sourceVip: ""
-
-# Proxy Mode: The mode line specifies whether kube-proxy should use iptables or ipvs for handling network traffic.
-# Cluster CIDR: The clusterCIDR line defines the IP range for the cluster's pod network, which is crucial for routing traffic correctly.
-# Kubeconfig Path: The kubeconfig line under clientConnection specifies the path to the kubeconfig file, which contains credentials and connection information for the API server.
-# Iptables and IPVS Settings: These sections contain settings specific to the chosen proxy mode, such as synchronization periods and masquerading options.
-# Metrics Server: The metricsBindAddress line specifies where the metrics server will listen, which is useful for monitoring.
-# NodePort Addresses: The nodePortAddresses line defines which IP addresses can be used for NodePort services, affecting how services are exposed externally.
-# OOM Score Adjustment: The oomScoreAdj line adjusts the out-of-memory score for the kube-proxy process, influencing its likelihood of being killed when the system is under memory pressure.
-
-# What is the root domain/zone configured for this kubernetes cluster?
-kubectl get cm coredns -n kube-system -o yaml
-    # apiVersion: v1
-    # data:
-    # Corefile: |
-    #     .:53 {
-    #         errors
-    #         health {
-    #         lameduck 5s
-    #         }
-    #         ready
-    #         kubernetes cluster.local in-addr.arpa ip6.arpa {      #### cluster.local
-    #         pods insecure
-    #         fallthrough in-addr.arpa ip6.arpa
-    #         ttl 30
-    #         }
-    #         prometheus :9153
-    #         forward . /etc/resolv.conf {
-    #         max_concurrent 1000
-    #         }
-    #         cache 30
-    #         loop
-    #         reload
-    #         loadbalance
-    #     }
-
----
-cat /etc/kubernetes/pki/apiserver.crt
-openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text -noout
-                  # Certificate:
-                  #     Data:
-                  #         Version: 3 (0x2)
-                  #         Serial Number: 3378315762146779274 (0x2ee230495ddca08a)
-                  #         Signature Algorithm: sha256WithRSAEncryption
-                  #         Issuer: CN = kubernetes  #####################
-                  #         Validity 
-                  #             Not Before: Nov 16 14:16:29 2024 GMT
-                  #             Not After : Nov 16 14:21:29 2025 GMT  #####################
-                  #         Subject: CN = kube-apiserver
-                  #         Subject Public Key Info:
-                  #             Public Key Algorithm: rsaEncryption
-                  #                 Public-Key: (2048 bit)
-                  #                 Modulus:
-                  #                     00:...
-                  #                     bc:17
-                  #                 Exponent: 65537 (0x10001)
-                  #         X509v3 extensions:
-                  #             X509v3 Key Usage: critical
-                  #                 Digital Signature, Key Encipherment
-                  #             X509v3 Extended Key Usage:
-                  #                 TLS Web Server Authentication
-                  #             X509v3 Basic Constraints: critical
-                  #                 CA:FALSE
-                  #             X509v3 Authority Key Identifier: A1:...
-                  #             X509v3 Subject Alternative Name:
-                  #                 DNS:controlplane, DNS:kubernetes, DNS:kubernetes.default, DNS:kubernetes.default.svc, DNS:kubernetes.default.svc.cluster.local, IP Address:10.96.0.1, IP Address:192.15.155.9
-                  #     Signature Algorithm: sha256WithRSAEncryption
-                  #     Signature Value: 65:...
-
----
-# Create a CertificateSigningRequest object with the name babak with the contents of the babak.csr file
-cat babak.csr | base64 -w 0
----
-apiVersion: certificates.k8s.io/v1
-kind: CertificateSigningRequest
-metadata:
-  name: babak
-spec:
-  groups:
-  - system:authenticated
-  requests: LS0tLS1CRU...
-  # Please note that an additional field called signerName should also be added when creating CSR.
-  # For client authentication to the API server we will use the built-in signer "kubernetes.io/kube-apiserver-client"
-  signerName: kubernetes.io/kube-apiserver-client
-  usage:
-  - client auth
----
-cat /etc/kubernetes/kubelet.conf  # no issue here:
-#       apiVersion: v1
-#       clusters:
-#       - cluster:
-#           certificate-authority-data: *****
-#           server: https://controlplane:6443
-#         name: default-cluster
-#       contexts:
-#       - context:
-#           cluster: default-cluster
-#           namespace: default
-#           user: default-auth
-#         name: default-context
-#       current-context: default-context
-#       kind: Config
-#       preferences: {}
-#       users:
-#       - name: default-auth
-#         user:
-#           client-certificate: /var/lib/kubelet/pki/kubelet-client-current.pem
-#           client-key: /var/lib/kubelet/pki/kubelet-client-current.pem
----
-cat /var/lib/kubelet/config.yaml
-        # apiVersion: kubelet.config.k8s.io/v1beta1
-        # kind: KubeletConfiguration
-        # authentication:
-        #   anonymous:
-        #     enabled: false
-        #   webhook:
-        #     cacheTTL: 0s
-        #     enabled: true
-        #   x509:
-        #     clientCAFile: /etc/kubernetes/pki/WRONG-CA-FILE.crt   #### this is obviously wrong, change to "ca.crt" => /etc/kubernetes/pki/ca.crt
-        # authorization:
-        #   mode: Webhook
-        #   webhook:
-        #     cacheAuthorizedTTL: 0s
-        #     cacheUnauthorizedTTL: 0s
-        # cgroupDriver: cgroupfs
-        # clusterDNS:
-        # - 172.20.0.10
-        # clusterDomain: cluster.local
-        # containerRuntimeEndpoint: ""
-        # cpuManagerReconcilePeriod: 0s
-        # evictionPressureTransitionPeriod: 0s
-        # fileCheckFrequency: 0s
-        # healthzBindAddress: 127.0.0.1
-        # healthzPort: 10248
-        # httpCheckFrequency: 0s
-        # imageMaximumGCAge: 0s
-        # imageMinimumGCAge: 0s
-        # logging:
-        #   flushFrequency: 0
-        #   options:
-        #     json:
-        #       infoBufferSize: "0"
-        #     text:
-        #       infoBufferSize: "0"
-        #   verbosity: 0
-        # memorySwap: {}
-        # nodeStatusReportFrequency: 0s
-        # nodeStatusUpdateFrequency: 0s
-        # resolvConf: /run/systemd/resolve/resolv.conf
-        # rotateCertificates: true
-        # runtimeRequestTimeout: 0s
-        # shutdownGracePeriod: 0s
-        # shutdownGracePeriodCriticalPods: 0s
-        # staticPodPath: /etc/kubernetes/manifests
-        # streamingConnectionIdleTimeout: 0s
-        # syncFrequency: 0s
-        # volumeStatsAggPeriod: 0s
