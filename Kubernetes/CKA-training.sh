@@ -860,4 +860,7 @@ vi admin.yaml
 #       readOnly: true
 #       mountPath: "/etc/secret-volume"
 
+# # From the hr pod nslookup the mysql service (in payroll namespace) and redirect the output to a file /root/CKA/nslookup.out
+k exec hr -- nslookup mysql.payroll.svc.cluster.local > /root/CKA/nslook.out
+
 kubectl apply -f admin.yaml
