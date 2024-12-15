@@ -202,7 +202,35 @@ k create rolebinding gitops-rolebinding -n project-1 --role=gitops-role --servic
 k auth can-i create secret -n project-1 --as system:serviceaccount:project-1:gitops
 
 ############################## NetworkPolicy
+# Create a new NetworkPolicy named allow-port-from-namespace in the existing namespace fubar. Ensure that the new NetworkPolicy allows Pods in namespace internal to connect to port 9000 of Pods in 
+# namespace fubar. Further ensure that the new NetworkPolicy: does not allow access to Pods, which don't listen on port 9000, does not allow access from Pods, which are not in namespace internal 
+# => this happens by default if we have specific ingress policy
+apiVersion: networking.k8s.io/v1
+kind: NetwrokPolicy
+metadata:
+  name: allow-port-from-namespace
+  namespace: fubar
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: internal
+    ports:
+    - protocol: TCP
+      port: 9000
 
+
+
+
+
+
+
+
+      
 
 
 # Schedule a pod as follows:  Name: nginx-kusc00401,  Image: nginx,  Node selector: disk=ssd
@@ -233,31 +261,6 @@ kubectl apply -f pod.yaml
 kubectl config use-context k8s
 kubectl get pods
 kubectl logs foo | grep "error file-not-found" > /opt/KUTR00101/foo
-
-
-
-
-
-# Create a new NetworkPolicy named allow-port-from-namespace in the existing namespace fubar. Ensure that the new NetworkPolicy allows Pods in namespace internal to connect to port 9000 of Pods in namespace fubar.
-# Further ensure that the new NetworkPolicy: does not allow access to Pods, which don't listen on port 9000, does not allow access from Pods, which are not in namespace internal => this happens by default if we have specific ingress policy
-# apiVersion: networking.k8s.io/v1
-# kind: NetwrokPolicy
-# metadata:
-#   name: named allow-port-from-namespace
-#   namespace: fubar
-# spec:
-#   podSelector: {}
-#   policyTypes:
-#   - Ingress
-#   ingress:
-#   - from:
-#     - namespaceSelector:
-#       matchLabels:
-#         kubernetes.io/metadaata.name: internal
-#     ports:
-#     - protocol: TCP
-#       port: 9000
-
 
 # Reconfigure the existing deployment front-end and add a port specification named http exposing port 80/tep of the existing container nginx.
 # Create a new service named front-end-svc exposing the container port http.
