@@ -1,0 +1,481 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-apiserver
+  namespace: kube-system
+  labels:
+    component: kube-apiserver
+spec:
+# Node selector to ensure the pod runs on the master node
+  nodeSelector:
+    node-role.kubernetes.io/master: ""
+  containers:
+  - name: kube-apiserver
+    image: k8s.gcr.io/kube-apiserver:v1.22.0
+    # Containers: Defines the container that runs the kube-apiserver binary. The command section includes various flags to configure the API server, such as authentication, authorization, and connection to the etcd database.
+    command:
+    - kube-apiserver
+    # Flags for configuring the API server
+    - --advertise-address=192.168.0.1
+    - --allow-privileged=true
+    - --authorization-mode=Node,RBAC
+    - --client-ca-file=/etc/kubernetes/pki/ca.crt
+    - --enable-admission-plugins=NodeRestriction
+    # address of etcd server
+    - --etcd-servers=https://127.0.0.1:2379
+    - --etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt
+    # Certificate file used to authenticate kube-apiserver as a client to ETCD Server
+    - --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt
+    - --etcd-keyfile=/etc/kubernetes/pki/apiserver-etcd-client.key
+    - --kubelet-client-certificate=/etc/kubernetes/pki/apiserver-kubelet-client.crt
+    # key used to authenticate kubeapi-server to the kubelet server
+    - --kubelet-client-key=/etc/kubernetes/pki/apiserver-kubelet-client.key
+    - --service-account-key-file=/etc/kubernetes/pki/sa.pub
+    - --service-cluster-ip-range=10.96.0.0/12
+    # certificate file used for the kube-api-server
+    - --tls-cert-file=/etc/kubernetes/pki/apiserver.crt
+    - --tls-private-key-file=/etc/kubernetes/pki/apiserver.key
+    ports:
+    - containerPort: 6443
+      hostPort: 6443
+      name: https
+    volumeMounts:
+    # Mounting necessary certificates and keys
+    - mountPath: /etc/kubernetes/pki
+      name: pki
+      readOnly: true
+  # Volumes section for mounting certificates and keys from node to the apiserver pod
+  volumes:
+  - name: pki
+    hostPath:
+      path: /etc/kubernetes/pki
+      type: DirectoryOrCreate
+  # Security context to run the container as a non-root user
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 3000
+    fsGroup: 2000
+
+
+---
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: kube-scheduler
+      namespace: kube-system
+      labels:
+        component: kube-scheduler
+    spec:
+      # Node selector to ensure the pod runs on the master node
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      containers:
+      - name: kube-scheduler
+        image: k8s.gcr.io/kube-scheduler:v1.22.0
+        command:
+        - kube-scheduler
+        # Flags for configuring the scheduler
+        - --kubeconfig=/etc/kubernetes/scheduler.conf
+        - --leader-elect=true
+        - --bind-address=127.0.0.1
+        ports:
+        - containerPort: 10251
+          hostPort: 10251
+          name: http
+        volumeMounts:
+        # Mounting the kubeconfig file for the scheduler
+        - mountPath: /etc/kubernetes
+          name: kubeconfig
+          readOnly: true
+      # Volumes section for mounting the kubeconfig file
+      volumes:
+      - name: kubeconfig
+        hostPath:
+          path: /etc/kubernetes
+          type: DirectoryOrCreate
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+        fsGroup: 2000
+
+---
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: kube-controller-manager
+      namespace: kube-system
+      labels:
+        component: kube-controller-manager
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      containers:
+      - name: kube-controller-manager
+        image: k8s.gcr.io/kube-controller-manager:v1.22.0
+        command:
+        - kube-controller-manager
+        # Flags for configuring the controller manager
+        - --kubeconfig=/etc/kubernetes/controller-manager.conf
+        - --service-account-private-key-file=/etc/kubernetes/pki/sa.key
+        - --root-ca-file=/etc/kubernetes/pki/ca.crt
+        - --leader-elect=true
+        - --allocate-node-cidrs=true
+        - --cluster-cidr=10.244.0.0/16
+        ports:
+        - containerPort: 10252
+          hostPort: 10252
+          name: http
+        volumeMounts:
+        # Mounting necessary configuration and key files
+        - mountPath: /etc/kubernetes
+          name: kubeconfig
+          readOnly: true
+        - mountPath: /etc/kubernetes/pki
+          name: pki
+          readOnly: true
+      volumes:
+      - name: kubeconfig
+        hostPath:
+          path: /etc/kubernetes
+          type: DirectoryOrCreate
+      - name: pki
+        hostPath:
+          path: /etc/kubernetes/pki
+          type: DirectoryOrCreate
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+        fsGroup: 2000
+
+---
+    apiVersion: apps/v1
+    kind: DaemonSet
+    metadata:
+      name: kube-proxy
+      namespace: kube-system
+      labels:
+        k8s-app: kube-proxy
+    spec:
+      selector:
+        matchLabels:
+          k8s-app: kube-proxy
+      template:
+        metadata:
+          labels:
+            k8s-app: kube-proxy
+        spec:
+          # Service account for kube-proxy
+          serviceAccountName: kube-proxy
+          # Containers section defines the kube-proxy container
+          containers:
+          - name: kube-proxy
+            image: k8s.gcr.io/kube-proxy:v1.22.0
+            command:
+            - /usr/local/bin/kube-proxy
+            # Flags for configuring kube-proxy
+            - --config=/var/lib/kube-proxy/config.conf
+            securityContext:
+              privileged: true
+            volumeMounts:
+            # Mounting necessary configuration files
+            - mountPath: /var/lib/kube-proxy
+              name: kube-proxy
+            - mountPath: /etc/ssl/certs
+              name: ssl-certs
+              readOnly: true
+          volumes:
+          - name: kube-proxy
+            configMap:
+              name: kube-proxy
+          - name: ssl-certs
+            hostPath:
+              path: /etc/ssl/certs
+              type: Directory
+          # Tolerations: Allows the kube-proxy to run on all nodes, including those with taints, by tolerating all taints with the Exists operator.
+          tolerations:
+          - operator: Exists
+
+
+---
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: etcd
+      namespace: kube-system
+      labels:
+        component: etcd
+    spec:
+      # Node selector to ensure the pod runs on the master node
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      containers:
+      - name: etcd
+        image: quay.io/coreos/etcd:v3.5.0
+        command:
+        - /usr/local/bin/etcd
+        - --name=etcd0
+        - --data-dir=/var/lib/etcd
+        # port to access etcd on
+        - --listen-client-urls=https://0.0.0.0:2379
+        - --advertise-client-urls=https://0.0.0.0:2379
+        # port that etcd server peers use to connect to each other
+        - --listen-peer-urls=https://0.0.0.0:2380
+        - --initial-advertise-peer-urls=https://0.0.0.0:2380
+        - --initial-cluster=etcd0=https://0.0.0.0:2380
+        - --initial-cluster-state=new
+        - --client-cert-auth=true
+        # CA Root Certificate used to serve ETCD Server
+        # ETCD can have its own CA. So this may be a different CA certificate than the one used by kube-api server.
+        - --trusted-ca-file=/etc/etcd/pki/ca.crt
+        # Certificate used to host ETCD server
+        - --cert-file=/etc/etcd/pki/etcd.crt
+        - --key-file=/etc/etcd/pki/etcd.key
+        ports:
+        - containerPort: 2379
+          name: client
+        - containerPort: 2380
+          name: peer
+        volumeMounts:
+        # Mounting necessary data and certificate files
+        - mountPath: /var/lib/etcd
+          name: etcd-data
+        - mountPath: /etc/etcd/pki
+          name: etcd-certs
+          readOnly: true
+      volumes:
+      # The data directory is where etcd stores its data, and the certificates are used for secure communication.
+      - name: etcd-data
+        hostPath:
+          path: /var/lib/etcd
+          type: DirectoryOrCreate
+      - name: etcd-certs
+        hostPath:
+          path: /etc/etcd/pki
+          type: DirectoryOrCreate
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+        fsGroup: 2000
+
+---
+# k describe cm kube-proxy -n kube-system | grep clusterCIDR
+# clusterCIDR: 10.244.0.0/16
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-proxy
+  namespace: kube-system
+  labels:
+    component: kube-proxy
+    tier: node
+data:
+  config.conf: |
+    apiVersion: kubeproxy.config.k8s.io/v1alpha1
+    kind: KubeProxyConfiguration
+    # Proxy mode: choose between 'iptables' or 'ipvs'
+    # Proxy Mode: The mode line specifies whether kube-proxy should use iptables or ipvs for handling network traffic.
+    mode: "iptables"
+    # CIDR range for the cluster's pod network
+    # Cluster CIDR: The clusterCIDR line defines the IP range for the cluster's pod network, which is crucial for routing traffic correctly.
+    clusterCIDR: "10.244.0.0/16"
+    clientConnection:
+      # Path to the kubeconfig file for API server connection
+      # Kubeconfig Path: The kubeconfig line under clientConnection specifies the path to the kubeconfig file, which contains credentials and connection information for the API server.
+      kubeconfig: "/var/lib/kube-proxy/kubeconfig.conf"
+    # Iptables and IPVS Settings: These sections contain settings specific to the chosen proxy mode, such as synchronization periods and masquerading options.
+    iptables:
+      # Whether to masquerade all traffic
+      masqueradeAll: false
+      # Bit of the iptables mark space to use for SNAT
+      masqueradeBit: 14
+      # Minimum interval between iptables rule syncs
+      minSyncPeriod: "0s"
+      # Interval between full iptables rule syncs
+      syncPeriod: "30s"
+    ipvs:
+      # Minimum interval between IPVS rule syncs
+      minSyncPeriod: "0s"
+      # IPVS scheduler (e.g., 'rr' for round-robin)
+      scheduler: "rr"
+      # Interval between full IPVS rule syncs
+      syncPeriod: "30s"
+    # Address and port for the metrics server
+    # Metrics Server: The metricsBindAddress line specifies where the metrics server will listen, which is useful for monitoring.
+    metricsBindAddress: "0.0.0.0:10249"
+    # IP addresses to use for NodePort services
+    # NodePort Addresses: The nodePortAddresses line defines which IP addresses can be used for NodePort services, affecting how services are exposed externally.
+    nodePortAddresses:
+      - "0.0.0.0/0"
+    # Adjusts the OOM score for the kube-proxy process
+    # OOM Score Adjustment: The oomScoreAdj line adjusts the out-of-memory score for the kube-proxy process, influencing its likelihood of being killed when the system is under memory pressure.
+    oomScoreAdj: -999
+    # Port range for NodePort services
+    portRange: ""
+    # Timeout for UDP connections
+    udpIdleTimeout: "250ms"
+    winkernel:
+      # Enable Direct Server Return (DSR) on Windows
+      enableDSR: false
+      # Name of the network for Windows
+      networkName: ""
+      # Source VIP for Windows
+      sourceVip: ""
+
+
+---
+# What is the root domain/zone configured for this kubernetes cluster?
+# kubectl get cm coredns -n kube-system -o yaml
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: coredns
+      namespace: kube-system
+    data:
+      Corefile: |
+          .:53 {
+              errors
+              health {
+              lameduck 5s
+              }
+              ready
+              kubernetes cluster.local in-addr.arpa ip6.arpa {      #### cluster.local
+              pods insecure
+              fallthrough in-addr.arpa ip6.arpa
+              ttl 30
+              }
+              prometheus :9153
+              forward . /etc/resolv.conf {
+              max_concurrent 1000
+              }
+              cache 30
+              loop
+              reload
+              loadbalance
+          }
+
+
+---
+# cat /etc/kubernetes/pki/apiserver.crt
+# openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text -noout
+                  Certificate:
+                      Data:
+                          Version: 3 (0x2)
+                          Serial Number: 3378315762146779274 (0x2ee230495ddca08a)
+                          Signature Algorithm: sha256WithRSAEncryption
+                          Issuer: CN = kubernetes  # Common Name
+                          Validity # when will the cert be valid and when will it expire
+                              Not Before: Nov 16 14:16:29 2024 GMT
+                              Not After : Nov 16 14:21:29 2025 GMT  
+                          Subject: CN = kube-apiserver
+                          Subject Public Key Info:
+                              Public Key Algorithm: rsaEncryption
+                                  Public-Key: (2048 bit)
+                                  Modulus:
+                                      00:...
+                                      bc:17
+                                  Exponent: 65537 (0x10001)
+                          X509v3 extensions:
+                              X509v3 Key Usage: critical
+                                  Digital Signature, Key Encipherment
+                              X509v3 Extended Key Usage:
+                                  TLS Web Server Authentication
+                              X509v3 Basic Constraints: critical
+                                  CA:FALSE
+                              X509v3 Authority Key Identifier: A1:...
+                              X509v3 Subject Alternative Name:
+                                  DNS:controlplane, DNS:kubernetes, DNS:kubernetes.default, DNS:kubernetes.default.svc, DNS:kubernetes.default.svc.cluster.local, IP Address:10.96.0.1, IP Address:192.15.155.9
+                      Signature Algorithm: sha256WithRSAEncryption
+                      Signature Value: 65:...
+
+
+---
+# Create a CertificateSigningRequest object with the name babak with the contents of the babak.csr file
+# cat babak.csr | base64 -w 0
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: babak
+spec:
+  groups:
+  - system:authenticated
+  requests: LS0tLS1CRU...
+  # Please note that an additional field called signerName should also be added when creating CSR.
+  # For client authentication to the API server we will use the built-in signer "kubernetes.io/kube-apiserver-client"
+  signerName: kubernetes.io/kube-apiserver-client
+  usage:
+  - client auth
+
+  
+---
+# cat /etc/kubernetes/kubelet.conf  # this is the kubeconfig file that kubelet uses to connect to kube-apiserver
+      apiVersion: v1
+      kind: Config
+      clusters:
+      - cluster:
+          certificate-authority-data: *****
+          server: https://controlplane:6443
+        name: default-cluster
+      contexts:
+      - context:
+          cluster: default-cluster
+          namespace: default
+          user: default-auth
+        name: default-context
+      current-context: default-context
+      users:
+      - name: default-auth
+        user:
+          client-certificate: /var/lib/kubelet/pki/kubelet-client-current.pem
+          client-key: /var/lib/kubelet/pki/kubelet-client-current.pem
+
+          
+---
+# cat /var/lib/kubelet/config.yaml
+        apiVersion: kubelet.config.k8s.io/v1beta1
+        kind: KubeletConfiguration
+        authentication:
+          anonymous:
+            enabled: false
+          webhook:
+            cacheTTL: 0s
+            enabled: true
+          x509:
+            clientCAFile: /etc/kubernetes/pki/ca.crt  
+        authorization:
+          mode: Webhook
+          webhook:
+            cacheAuthorizedTTL: 0s
+            cacheUnauthorizedTTL: 0s
+        cgroupDriver: cgroupfs
+        clusterDNS:
+        - 172.20.0.10
+        clusterDomain: cluster.local
+        containerRuntimeEndpoint: ""
+        cpuManagerReconcilePeriod: 0s
+        evictionPressureTransitionPeriod: 0s
+        fileCheckFrequency: 0s
+        healthzBindAddress: 127.0.0.1
+        healthzPort: 10248
+        httpCheckFrequency: 0s
+        imageMaximumGCAge: 0s
+        imageMinimumGCAge: 0s
+        logging:
+          flushFrequency: 0
+          options:
+            json:
+              infoBufferSize: "0"
+            text:
+              infoBufferSize: "0"
+          verbosity: 0
+        nodeStatusReportFrequency: 0s
+        nodeStatusUpdateFrequency: 0s
+        resolvConf: /run/systemd/resolve/resolv.conf
+        rotateCertificates: true
+        runtimeRequestTimeout: 0s
+        shutdownGracePeriod: 0s
+        shutdownGracePeriodCriticalPods: 0s
+        staticPodPath: /etc/kubernetes/manifests
+        streamingConnectionIdleTimeout: 0s
+        syncFrequency: 0s
+        volumeStatsAggPeriod: 0s
