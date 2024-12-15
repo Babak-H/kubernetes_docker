@@ -259,3 +259,380 @@ systemctl restart kubelet
 # exit back to controlplane node
 kubectl uncordon node01
 kubectl get pods -o wide | grep gold # make sure this is scheduled on a node
+
+# isntall docker on nodes for kubertnets installation
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+sudo apt-get update
+sudo apt-get install -y docker-ce
+sudo systemctl status docker
+sudo docker run hello-world
+
+
+# ask chatgpt: kube-schduler only connects to kube-api server. does it need to have a private key certificate file? if yes why?
+# please visualize it with an image/diagram
+
+#//////////////////////////////////////////////////////////////////////////////
+---
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: kube-apiserver
+        namespace: kube-system
+        labels:
+          component: kube-apiserver
+      spec:
+        # Node selector to ensure the pod runs on the master node
+        nodeSelector:
+          node-role.kubernetes.io/master: ""
+
+        # Containers section defines the kube-apiserver container
+        containers:
+        - name: kube-apiserver
+          image: k8s.gcr.io/kube-apiserver:v1.22.0
+          command:
+          - kube-apiserver
+          # Flags for configuring the API server
+          - --advertise-address=192.168.0.1
+          - --allow-privileged=true
+          - --authorization-mode=Node,RBAC
+          - --client-ca-file=/etc/kubernetes/pki/ca.crt
+          - --enable-admission-plugins=NodeRestriction
+          - --etcd-servers=https://127.0.0.1:2379
+          - --etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt
+          - --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt
+          - --etcd-keyfile=/etc/kubernetes/pki/apiserver-etcd-client.key
+          - --kubelet-client-certificate=/etc/kubernetes/pki/apiserver-kubelet-client.crt
+          - --kubelet-client-key=/etc/kubernetes/pki/apiserver-kubelet-client.key
+          - --service-account-key-file=/etc/kubernetes/pki/sa.pub
+          - --service-cluster-ip-range=10.96.0.0/12
+          - --tls-cert-file=/etc/kubernetes/pki/apiserver.crt
+          - --tls-private-key-file=/etc/kubernetes/pki/apiserver.key
+          ports:
+          - containerPort: 6443
+            hostPort: 6443
+            name: https
+          volumeMounts:
+          # Mounting necessary certificates and keys
+          - mountPath: /etc/kubernetes/pki
+            name: pki
+            readOnly: true
+        # Volumes section for mounting certificates and keys
+        volumes:
+        - name: pki
+          hostPath:
+            path: /etc/kubernetes/pki
+            type: DirectoryOrCreate
+        # Security context to run the container as a non-root user
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 3000
+          fsGroup: 2000
+
+# Node Selector: Ensures that the kube-apiserver pod runs on a node labeled as a master node.
+# Containers: Defines the container that runs the kube-apiserver binary. The command section includes various flags to configure the API server, such as authentication, authorization, and connection to the etcd database.
+# Ports: Specifies the ports that the API server listens on, both inside the container and on the host.
+# Volume Mounts and Volumes: These sections are used to mount necessary certificates and keys into the container, which are required for secure communication.
+# Security Context: Specifies the user and group IDs under which the container should run, enhancing security by avoiding running as the root user.
+# This is a basic example and may need to be adjusted based on your specific Kubernetes setup and version.
+
+
+---
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: kube-scheduler
+      namespace: kube-system
+      labels:
+        component: kube-scheduler
+    spec:
+      # Node selector to ensure the pod runs on the master node
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+
+      # Containers section defines the kube-scheduler container
+      containers:
+      - name: kube-scheduler
+        image: k8s.gcr.io/kube-scheduler:v1.22.0
+        command:
+        - kube-scheduler
+        # Flags for configuring the scheduler
+        - --kubeconfig=/etc/kubernetes/scheduler.conf
+        - --leader-elect=true
+        - --bind-address=127.0.0.1
+        ports:
+        - containerPort: 10251
+          hostPort: 10251
+          name: http
+        volumeMounts:
+        # Mounting the kubeconfig file for the scheduler
+        - mountPath: /etc/kubernetes
+          name: kubeconfig
+          readOnly: true
+
+      # Volumes section for mounting the kubeconfig file
+      volumes:
+      - name: kubeconfig
+        hostPath:
+          path: /etc/kubernetes
+          type: DirectoryOrCreate
+
+      # Security context to run the container as a non-root user
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+        fsGroup: 2000
+
+# Node Selector: Ensures that the kube-scheduler pod runs on a node labeled as a master node.
+# Containers: Defines the container that runs the kube-scheduler binary. The command section includes flags to configure the scheduler, such as specifying the kubeconfig file for cluster access and enabling leader election for high availability.
+# Ports: Specifies the ports that the scheduler listens on, both inside the container and on the host. The default port for the scheduler is 10251.
+# Volume Mounts and Volumes: These sections are used to mount the kubeconfig file into the container, which is required for the scheduler to communicate with the Kubernetes API server.
+# Security Context: Specifies the user and group IDs under which the container should run, enhancing security by avoiding running as the root user.
+
+---
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: kube-controller-manager
+      namespace: kube-system
+      labels:
+        component: kube-controller-manager
+    spec:
+      # Node selector to ensure the pod runs on the master node
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+
+      # Containers section defines the kube-controller-manager container
+      containers:
+      - name: kube-controller-manager
+        image: k8s.gcr.io/kube-controller-manager:v1.22.0
+        command:
+        - kube-controller-manager
+        # Flags for configuring the controller manager
+        - --kubeconfig=/etc/kubernetes/controller-manager.conf
+        - --service-account-private-key-file=/etc/kubernetes/pki/sa.key
+        - --root-ca-file=/etc/kubernetes/pki/ca.crt
+        - --leader-elect=true
+        - --allocate-node-cidrs=true
+        - --cluster-cidr=10.244.0.0/16
+        ports:
+        - containerPort: 10252
+          hostPort: 10252
+          name: http
+        volumeMounts:
+        # Mounting necessary configuration and key files
+        - mountPath: /etc/kubernetes
+          name: kubeconfig
+          readOnly: true
+        - mountPath: /etc/kubernetes/pki
+          name: pki
+          readOnly: true
+      # Volumes section for mounting configuration and key files
+      volumes:
+      - name: kubeconfig
+        hostPath:
+          path: /etc/kubernetes
+          type: DirectoryOrCreate
+      - name: pki
+        hostPath:
+          path: /etc/kubernetes/pki
+          type: DirectoryOrCreate
+      # Security context to run the container as a non-root user
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+        fsGroup: 2000
+
+# Node Selector: Ensures that the kube-controller-manager pod runs on a node labeled as a master node.
+# Containers: Defines the container that runs the kube-controller-manager binary. The command section includes flags to configure the controller manager, such as specifying the kubeconfig file for cluster access, service account key files, and enabling leader election for high availability.
+# Ports: Specifies the ports that the controller manager listens on, both inside the container and on the host. The default port for the controller manager is 10252.
+# Volume Mounts and Volumes: These sections are used to mount necessary configuration and key files into the container, which are required for the controller manager to communicate with the Kubernetes API server and manage resources.
+# Security Context: Specifies the user and group IDs under which the container should run, enhancing security by avoiding running as the root user.
+
+---
+    apiVersion: apps/v1
+    kind: DaemonSet
+    metadata:
+      name: kube-proxy
+      namespace: kube-system
+      labels:
+        k8s-app: kube-proxy
+    spec:
+      selector:
+        matchLabels:
+          k8s-app: kube-proxy
+      template:
+        metadata:
+          labels:
+            k8s-app: kube-proxy
+        spec:
+          # Service account for kube-proxy
+          serviceAccountName: kube-proxy
+
+          # Containers section defines the kube-proxy container
+          containers:
+          - name: kube-proxy
+            image: k8s.gcr.io/kube-proxy:v1.22.0
+            command:
+            - /usr/local/bin/kube-proxy
+            # Flags for configuring kube-proxy
+            - --config=/var/lib/kube-proxy/config.conf
+            securityContext:
+              privileged: true
+            volumeMounts:
+            # Mounting necessary configuration files
+            - mountPath: /var/lib/kube-proxy
+              name: kube-proxy
+            - mountPath: /etc/ssl/certs
+              name: ssl-certs
+              readOnly: true
+          # Volumes section for mounting configuration files
+          volumes:
+          - name: kube-proxy
+            configMap:
+              name: kube-proxy
+          - name: ssl-certs
+            hostPath:
+              path: /etc/ssl/certs
+              type: Directory
+          # Tolerations to allow kube-proxy to run on all nodes
+          tolerations:
+          - operator: Exists
+
+# DaemonSet: Ensures that a kube-proxy pod runs on each node in the cluster.
+# Service Account: Specifies the service account under which the kube-proxy runs. This is necessary for accessing the Kubernetes API.
+# Containers: Defines the container that runs the kube-proxy binary. The command section includes flags to configure kube-proxy, such as specifying the configuration file.
+# Security Context: The privileged flag is set to true to allow kube-proxy to modify network settings on the host.
+# Volume Mounts and Volumes: These sections are used to mount necessary configuration files and SSL certificates into the container. The configuration is typically provided via a ConfigMap.
+# Tolerations: Allows the kube-proxy to run on all nodes, including those with taints, by tolerating all taints with the Exists operator.
+
+---
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: etcd
+      namespace: kube-system
+      labels:
+        component: etcd
+    spec:
+      # Node selector to ensure the pod runs on the master node
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      # Containers section defines the etcd container
+      containers:
+      - name: etcd
+        image: quay.io/coreos/etcd:v3.5.0
+        command:
+        - /usr/local/bin/etcd
+        # Flags for configuring etcd
+        - --name=etcd0
+        - --data-dir=/var/lib/etcd
+        - --listen-client-urls=https://0.0.0.0:2379
+        - --advertise-client-urls=https://0.0.0.0:2379
+        - --listen-peer-urls=https://0.0.0.0:2380
+        - --initial-advertise-peer-urls=https://0.0.0.0:2380
+        - --initial-cluster=etcd0=https://0.0.0.0:2380
+        - --initial-cluster-state=new
+        - --client-cert-auth=true
+        - --trusted-ca-file=/etc/etcd/pki/ca.crt
+        - --cert-file=/etc/etcd/pki/etcd.crt
+        - --key-file=/etc/etcd/pki/etcd.key
+        ports:
+        - containerPort: 2379
+          name: client
+        - containerPort: 2380
+          name: peer
+        volumeMounts:
+        # Mounting necessary data and certificate files
+        - mountPath: /var/lib/etcd
+          name: etcd-data
+        - mountPath: /etc/etcd/pki
+          name: etcd-certs
+          readOnly: true
+      # Volumes section for mounting data and certificate files
+      volumes:
+      - name: etcd-data
+        hostPath:
+          path: /var/lib/etcd
+          type: DirectoryOrCreate
+      - name: etcd-certs
+        hostPath:
+          path: /etc/etcd/pki
+          type: DirectoryOrCreate
+      # Security context to run the container as a non-root user
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+        fsGroup: 2000
+
+# Node Selector: Ensures that the etcd pod runs on a node labeled as a master node.
+# Containers: Defines the container that runs the etcd binary. The command section includes flags to configure etcd, such as specifying the node name, data directory, and network settings for client and peer communication.
+# Ports: Specifies the ports that etcd listens on for client and peer communication.
+# Volume Mounts and Volumes: These sections are used to mount necessary data directories and certificate files into the container. The data directory is where etcd stores its data, and the certificates are used for secure communication.
+# Security Context: Specifies the user and group IDs under which the container should run, enhancing security by avoiding running as the root user.
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-proxy
+  namespace: kube-system
+  labels:
+    component: kube-proxy
+    tier: node
+data:
+  config.conf: |
+    apiVersion: kubeproxy.config.k8s.io/v1alpha1
+    kind: KubeProxyConfiguration
+
+    # Proxy mode: choose between 'iptables' or 'ipvs'
+    mode: "iptables"
+    # CIDR range for the cluster's pod network
+    clusterCIDR: "10.244.0.0/16"
+    clientConnection:
+      # Path to the kubeconfig file for API server connection
+      kubeconfig: "/var/lib/kube-proxy/kubeconfig.conf"
+    iptables:
+      # Whether to masquerade all traffic
+      masqueradeAll: false
+      # Bit of the iptables mark space to use for SNAT
+      masqueradeBit: 14
+      # Minimum interval between iptables rule syncs
+      minSyncPeriod: "0s"
+      # Interval between full iptables rule syncs
+      syncPeriod: "30s"
+    ipvs:
+      # Minimum interval between IPVS rule syncs
+      minSyncPeriod: "0s"
+      # IPVS scheduler (e.g., 'rr' for round-robin)
+      scheduler: "rr"
+      # Interval between full IPVS rule syncs
+      syncPeriod: "30s"
+    # Address and port for the metrics server
+    metricsBindAddress: "0.0.0.0:10249"
+    # IP addresses to use for NodePort services
+    nodePortAddresses:
+      - "0.0.0.0/0"
+    # Adjusts the OOM score for the kube-proxy process
+    oomScoreAdj: -999
+    # Port range for NodePort services
+    portRange: ""
+    # Timeout for UDP connections
+    udpIdleTimeout: "250ms"
+    winkernel:
+      # Enable Direct Server Return (DSR) on Windows
+      enableDSR: false
+      # Name of the network for Windows
+      networkName: ""
+      # Source VIP for Windows
+      sourceVip: ""
+
+# Proxy Mode: The mode line specifies whether kube-proxy should use iptables or ipvs for handling network traffic.
+# Cluster CIDR: The clusterCIDR line defines the IP range for the cluster's pod network, which is crucial for routing traffic correctly.
+# Kubeconfig Path: The kubeconfig line under clientConnection specifies the path to the kubeconfig file, which contains credentials and connection information for the API server.
+# Iptables and IPVS Settings: These sections contain settings specific to the chosen proxy mode, such as synchronization periods and masquerading options.
+# Metrics Server: The metricsBindAddress line specifies where the metrics server will listen, which is useful for monitoring.
+# NodePort Addresses: The nodePortAddresses line defines which IP addresses can be used for NodePort services, affecting how services are exposed externally.
+# OOM Score Adjustment: The oomScoreAdj line adjusts the out-of-memory score for the kube-proxy process, influencing its likelihood of being killed when the system is under memory pressure.
