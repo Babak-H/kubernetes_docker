@@ -28,12 +28,14 @@ k get nodes
 ssh controlplane # in case we are not on master node
 kubeadm token create --print-join-command  # save the output command and use it on node01
 ssh node01
-kubeadm join 172.30.1.2:6443 --token TOKEN --discovery-token-ca-cert-hash CERT-HASH
+sudo -i
+kubeadm join 172.30.1.2:6443 --token sfbhsu.llclabbyggkogg9q --discovery-token-ca-cert-hash sha256:4382fe27b4d9a6e4115fb22fb315f4687e355909e76e66ee46a6bde485877464
 # if there is any error here check the kubelet
 systemctl status kubelet
 systemctl start kubelet
 systemctl status kubelet
 exit
+ssh controlplane
 kubectl get nodes
 kubectl run web --image=nginx
 kubectl get pods
@@ -114,6 +116,22 @@ k drain kworker --ignore-daemonsets  # error due to using local volume
 k drain kworker --ignore-daemonsets --delete-emptydir-data
 kubectl get pods -o wide
 
+# coreDNS version
+k describe po coredns-xxx-xxx -n kube-system # coreDNS version is visible here
+
+# coreDNS TTL?
+# The TTL value used for CoreDNS lookup responses is configured within a ConfigMap resource named coredns located in the kube-system namespace. 
+k get cm codedns -n kube-system
+# kubernetes cluster.local in-addr.arpa ip6.arpa {
+#     pods insecure
+#     fallthrough in-addr.arpa ip6.arpa
+#     ttl 30   ###### 
+# }
+
+# Determine whether there are any pods running on the cluster that are not using CoreDNS for DNS resolution ??
+k get po -A -o=custom-columns=NodeName:.metadata.name,DNSPOLICY:.spec.dnsPolicy
+
+
 # Taint the worker node to be Unschedulable. Once done, create a pod called dev-redis, image redis:alpine to ensure workloads are not scheduled to this worker node. Finally, 
 # create a new pod called prod-redis and image redis:alpine with toleration to be scheduled on node01. 
 k get nodes -o wide
@@ -138,6 +156,11 @@ kubectl apply -f pod-redis.yaml
         value: prodcution
 
 kubectl get pods -o wide 
+
+
+echo journalctl -u kubelet >> /home/ubuntu/kubelet.sh
+echo k logs kube-scheduler-ip-10-0-0-100.us-west-2.compute.internal -n kube-system >> /home/ubuntu/scheduler.sh
+
 
 #################################################################################### custom json values
 # Check to see how many nodes are ready (not including nodes tainted NoSchedule) and write the number to /opt/KUSC00402/kusc00402.txt.
@@ -220,7 +243,7 @@ metadata:
   namespace: echo
 spec:
   podSelector: {}
-  policyType:
+  policyTypes:
   - Ingress 
   ingress:
   - from:
@@ -240,7 +263,7 @@ metadata:
   name: default-deny
 spec:
   podSelector: {}
-  policyType:
+  policyTypes:
   - Ingress  # if we do not mention any specific ingress policy , all is denied!
 
 # you have a cluster with pods in many namespaces. "db" pods in "project-a" namespace should only be acceesible from "service" pods that are running in "project-b" namespace => create networkPolicy
@@ -256,7 +279,7 @@ spec:
   podSelector:
     matchLabels:
       app: db  # Assuming your db pods have a label "app=db"
-  PolicyTypes:
+  policyTypes:
   - Ingress
   ingress:
   - from:
@@ -298,6 +321,31 @@ spec:
 k create ingress pong -n ing-internal --rule="/hello=hello:5678"
 k get svc -A # get the ip address
 curl -KL Internal-IP/hello
+
+k create ingress web -n ca1 --rule="/=web-svc:80"
+kubectl describe cm -n ca1 webapp-host-fqdn
+k edit ingress web -n ca1
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web
+  namespace: ca1
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: web.35.83.124.103.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-svc
+                port:
+                  number: 80
 
 #################################################################################### DaemonSets
 # Ensure a single instance of pod nginx is running on each node of the Kubernetes cluster where nginx also represents the Image name which has to be used. Do not override any taints 
@@ -376,6 +424,7 @@ spec:
   - ReadOnlyMany
   hostPath:
     path: "/srv/app-data"
+  storageClassName: gp2
 
 k get pv
 
@@ -539,6 +588,18 @@ spec:
     - name: secret-volume
       readOnly: true
       mountPath: "/etc/secret-volume"
+
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: class
+provisioner: kubernetes.io/aws-ebs
+reclaimPolicy: Retain 
+allowVolumeExpansion: false
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  type: gp2
       
 #################################################################################### Service
 # Reconfigure the existing deployment front-end and add a port specification named http exposing port 80/tcp of the existing container nginx.
@@ -569,6 +630,23 @@ k get nodes
 k run static-pod --image busybox --dry-run=client -o yaml --command -- sleep 2000 > spod.yaml
 ssh node01
 cp spod.yaml /etc/kubernetes/manifests
+
+# Create a kubectl command that lists out all static pod names currently running within the cluster. Run the kubectl command and save the output directly into 
+# the following file /home/ubuntu/static-pods/report.txt on the bastion node.
+k get po --all-namespaces
+# if a pod's own references has kind "NODE" it means that its static pod
+k get po -A -o=custom-columns=NAME:.metadata.name,STATIC:.metadata.ownReferences[*].kind | grep
+
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   annotations:
+#     cni.projectcalico.org/podIP: 192.168.203.136/32
+#   name: blah-01-ip-10-0-0-10.us-west-2.compute.internal
+#   ownerReferences:
+#   - apiVersion: v1
+#     kind: Node
+
 
 # An existing Pod needs to be integrated into the Kubernetes built-in logging architecture (e.g. kubectl logs). Adding a streaming sidecar container is a good and common way to 
 # accomplish this requirement. Add a sidecar container named sidecar, using the busybox image, to the existing Pod big-corp-app. The new sidecar container has to run the following command:
@@ -723,6 +801,53 @@ k get ns
 k run nginxpod --image=nginx --labels=env=prod -n production
 k get po -n production --show-labels
 
+
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: nginx
+  name: nginx
+  namespace: qq3
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+    livenessProbe:
+      httpGet:
+        port: 80
+    readinessProbe: 
+      httpGet:
+        port: 80
+
+
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: apache
+  name: apache
+spec:
+  containers:
+  - image: httpd
+    name: apache
+    env:
+      - name: CONTENT
+        valueFrom:
+          configMapKeyRef:
+            name: cloudacademy
+            key: content
+      - name: PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: credentials
+            key: password 
+      - name: USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: credentials
+            key: username
+
 #################################################################################### Deployment
 
 # create a deployment named 'presentation' with image nginx
@@ -762,3 +887,5 @@ k rollout history deploy nginx-deploy
 k describe deploy nginx-deploy
 # add the annotation message 'Updated nginx image to 1.17'
 k annotate deploy nginx-deploy kubernetes.io/change-cause="Updated nginx image to 1.17"
+
+kubectl rollout undo deployment/apache-deployment -n qq3
