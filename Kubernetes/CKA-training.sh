@@ -1,4 +1,4 @@
-############################ Upgrade Cluster
+#################################################################################### Upgrade Cluster
 # Given an existing Kubernetes cluster running version 1.22.1, upgrade all of the Kubernetes control plane and node components on the master node only to version 1.22.2.
 # Be sure to drain the master node before upgrading it and uncordon it after the upgrade
 # You are also expected to upgrade kubelet and kubectl on the master node, do NOT upgrade the worker nodes, etcd, the containerv manager, the CNI plugins or the DNS service
@@ -21,7 +21,7 @@ exit
 k uncordon mk8s-master-0
 k get nodes
 
-############################ Join Node to cluster
+#################################################################################### Join Node to cluster
 # join node01 worker node to cluster and you have to deploy pod on the node01, pod name should be web and image should be nginx
 
 k get nodes
@@ -38,7 +38,7 @@ kubectl get nodes
 kubectl run web --image=nginx
 kubectl get pods
 
-############################ ETCD Backup Restore
+#################################################################################### ETCD Backup Restore
 # create a snapshot of the existing etcd instance running at https://127.0.0.1:2379, saving the snapshot to /var/lib/backup/etcd-snapshot.db
 # ca certificate => /opt/kuin/ca.crt   client-certificate => /opt/kuin/etcd-client.crt  client-key => /opt/kuin/etcd-client.key
 ETCDCTL_API=3 etcdctl --endpoints 127.0.0.1:2379 --cacert=/opt/kuin/ca.crt --cert=/opt/kuin/etcd-client.crt --key=/opt/kuin/etcd-client.key snapshot save /var/lib/backup/etcd-snapshot.db
@@ -59,7 +59,7 @@ vi /etc/kubernetes/manifests/etcd.yaml
 export ETCDCTL_API=3
 etcdctl snapshot save --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --endpoint=127.0.0.1:2379 /opt/etcd-backup.db
 
-############################ Cluster Troubleshooting
+#################################################################################### Cluster Troubleshooting
 # a kubeconfig file called "admin.kubeconfig" has been created in /root/CKA . there is something wrong with the configuration. troubleshoot and fix it
 # make sure the port for kube-apiserver is correct. correct port number is "6443"
 k cluster-info --kubeconfig=/root/CKA/admin.kubeconfig
@@ -121,26 +121,25 @@ k taint node node01 env_type=production:NoSchedule
 k describe nodes node01 | grep -i taint 
 k run dev-redis --image=redis:alpine --dry-run=clinet -o yaml > pod-redis.yaml
 kubectl apply -f pod-redis.yaml 
-vi pod-redis.yaml
-    # apiVersion: v1 
-    # kind: Pod 
-    # metadata:
-    #   name: prod-redis  # edit here
-    # spec:
-    #   containers:
-    #   - name: prod-redis # edit here 
-    #     image: redis:alpine
-    #   add toleration here
-    #   tolerations:
-    #   - effect: Noschedule 
-    #     key: env_type 
-    #     operator: Equal 
-    #     value: prodcution
 
-kubectl create -f pod-redis.yaml 
+    apiVersion: v1 
+    kind: Pod 
+    metadata:
+      name: prod-redis  # edit here
+    spec:
+      containers:
+      - name: prod-redis # edit here 
+        image: redis:alpine
+      add toleration here
+      tolerations:
+      - effect: Noschedule 
+        key: env_type 
+        operator: Equal 
+        value: prodcution
+
 kubectl get pods -o wide 
 
-############################## custom json values
+#################################################################################### custom json values
 # Check to see how many nodes are ready (not including nodes tainted NoSchedule) and write the number to /opt/KUSC00402/kusc00402.txt.
 echo $(k get nodes --no-headers | grep -v 'NoSchedule' | grep -c 'Ready' | wc -l ) > opt/KUSC00402/kusc00402.txt
 # or
@@ -175,7 +174,12 @@ k exec hr -- nslookup mysql.payroll.svc.cluster.local > /root/CKA/nslook.out
 # list all pods sorted by timestamp
 k get po --sort-by=.metadata.creationTimestamp
 
-############################## Role, RoleBinding, ClusterRole, ClusterRoleBinding
+# Monitor the logs of pod foo and: Extract log lines corresponding to error file-not-found, Write them to /opt/KUTR00101/foo 
+k config use-context k8s
+k get pods
+k logs foo | grep "error file-not-found" > /opt/KUTR00101/foo
+
+#################################################################################### Role, RoleBinding, ClusterRole, ClusterRoleBinding
 # You have been asked to create a new ClusterRole for a deployment pipeline and bind it to a specific ServiceAccount scoped to a specific namespace.
 # Create a new ClusterRole named deployment-clusterrole, which only allows to create the following resource types: Deployment, StatefulSet, DaemonSet
 # Create a new ServiceAccount named cicd-token in the existing namespace app-team1, Bind the new ClusterRole deployment-clusterrole to the new ServiceAccount cicd-token, limited to the namespace app-team1.
@@ -201,100 +205,412 @@ k create role gitops-role -n project-1 --verb=create --resources=secrets,configm
 k create rolebinding gitops-rolebinding -n project-1 --role=gitops-role --serviceaccount=gitops
 k auth can-i create secret -n project-1 --as system:serviceaccount:project-1:gitops
 
-############################## NetworkPolicy
-# Create a new NetworkPolicy named allow-port-from-namespace in the existing namespace fubar. Ensure that the new NetworkPolicy allows Pods in namespace internal to connect to port 9000 of Pods in 
-# namespace fubar. Further ensure that the new NetworkPolicy: does not allow access to Pods, which don't listen on port 9000, does not allow access from Pods, which are not in namespace internal 
-# => this happens by default if we have specific ingress policy
+#################################################################################### NetworkPolicy
+# Create a new NetworkPolicy named allow-port-from-namespace in the existing namespace echo. Ensure that the new NetworkPolicy allows Pods in namespace internal to connect to port 9200/tcp of Pods in namespace echo. 
+# ensure that: does not allow access to Pods, which don't listen on port 9200/tcp => applied via adding the port
+# does not allow access from Pods, which are not in namespace internal => applied when selecting namespace
+k create ns echo
+k create ns internal
+k label ns internal namespace=internal  # not required
+
 apiVersion: networking.k8s.io/v1
-kind: NetwrokPolicy
+kind: NetworkPolicy
 metadata:
   name: allow-port-from-namespace
-  namespace: fubar
+  namespace: echo
 spec:
   podSelector: {}
-  policyTypes:
+  policyType:
+  - Ingress 
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: internal   # or namespace: internal
+    ports:
+    - protocol: TCP
+      port: 9200
+
+
+# create a network policy that denies all ingress (incoming) traffic
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector: {}
+  policyType:
+  - Ingress  # if we do not mention any specific ingress policy , all is denied!
+
+# you have a cluster with pods in many namespaces. "db" pods in "project-a" namespace should only be acceesible from "service" pods that are running in "project-b" namespace => create networkPolicy
+k get po -n project-a --show-labels
+k get po -n project-b --show-labels
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-service-to-db
+  namespace: project-a
+spec:
+  podSelector:
+    matchLabels:
+      app: db  # Assuming your db pods have a label "app=db"
+  PolicyTypes:
   - Ingress
   ingress:
   - from:
     - namespaceSelector:
         matchLabels:
-          kubernetes.io/metadata.name: internal
-    ports:
-    - protocol: TCP
-      port: 9000
+          name: project-b  # Allow access from project-b namespace
+    - podSelector:
+         matchLabels:
+           app: service  # Allow access from pods with label app=service in project-b namespace
 
+#################################################################################### Ingress
+# create a new "nginx resource": name:pong, namespace:ing-internal, expose service hello on path /hello using service port 5678 => Ingress
 
+k config use-context k8s
+k get ns
+# in case namespace does not exist
+k create ns ing-internal
+k get svc -n ing-internal
 
+apiVersion: networking.k8s.io/v1
+kind: Ingress 
+metadata:
+  name: pong
+  namespace: ing-internal
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /hello
+        pathType: Prefix
+        backend: 
+          service: 
+            name: hello 
+            port:
+             5678
+# or
+k create ingress pong -n ing-internal --rule="/hello=hello:5678"
+k get svc -A # get the ip address
+curl -KL Internal-IP/hello
 
+#################################################################################### DaemonSets
+# Ensure a single instance of pod nginx is running on each node of the Kubernetes cluster where nginx also represents the Image name which has to be used. Do not override any taints 
+# currently in place. => Use DaemonSet to complete this task and use ds-kusc00201 as DaemonSet name.
 
-
-
-
-      
-
-
-# Schedule a pod as follows:  Name: nginx-kusc00401,  Image: nginx,  Node selector: disk=ssd
-kubectl get nodes -o wide --show-labels | grep -i disk=ssd 
-# if not 
-kubectl label node node01 disk=ssd
-
-kubectl run nginx-kusc00401 --image=nginx --dry-run=client -o yaml > pod.yaml
-vi pod.yaml
-
-    apiVersion: v1
-    kind: Pod
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ds-kusc00201
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  template:
     metadata:
       labels:
-        run: nginx-kusc00401
-        name: nginx-kusc00401
-    spec:
+        app: nginx
+    spec: 
+      # this toleration basically overrides the taint of not running on master node
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
       containers:
-      - image: nginx
-        name: nginx
-      # add node selector section
-      nodeSelector:
-        disk: ssd
+      - name: nginx
+        image: nginx
 
-kubectl apply -f pod.yaml
+# use namespace project-1 for following. create DaemonSet named "daemon-imp" with image "httpd:2.4-alpine" and labels "id=daemon-imp" and "uuid=184". its pods should request 20 millicore
+# cpu and 20 mebabytes memory. the pods of the daemonset should run on ALL Nodes, including controlplanes
+k get nodes
+k get ns
+k create ns project-1  # in case not existing
 
-# Monitor the logs of pod foo and: Extract log lines corresponding to error file-not-found, Write them to /opt/KUTR00101/foo 
-kubectl config use-context k8s
-kubectl get pods
-kubectl logs foo | grep "error file-not-found" > /opt/KUTR00101/foo
+apiVersion: v1
+kind: DaemonSet
+metadata:
+  name: daemon-imp
+  namespace: project-1
+  labels:
+    id: daemon-imp
+    uuid: 184
+spec:
+  selector:
+    matchLabels:
+      id: daemon-imp
+      uuid: 184
+  template:
+    metadata: 
+      labels:
+        id: daemon-imp
+        uuid: 184
+    spec:
+      tolerations: # the pods of the daemonset should run on ALL Nodes, including controlplanes
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      containers:
+      - image: httpd:2.4-alpine
+        name: daemon-imp
+        resources:
+          requests:
+            memory: "20Mi"
+            cpu: "20m"
 
-# Reconfigure the existing deployment front-end and add a port specification named http exposing port 80/tep of the existing container nginx.
+k get ds -n project1 -o wide
+
+#################################################################################### PV, PVC, StorageClass
+# Create a persistent volume with name app-data, of capacity 2Gi and access mode ReadOnlyMany. The type of volume is hostPath and its location is /srv/app-data. 
+apiVersion: v1
+kind: PersistentVolume
+metadata: 
+  name: app-data
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+  - ReadOnlyMany
+  hostPath:
+    path: "/srv/app-data"
+
+k get pv
+
+# Create a new PersistentVolumeClaim: Name: pv-volume | Class: csi-hostpath-sc | Capacity: 10Mi
+# Create a new Pod which mounts the PersistentVolumeClaim as a volume: Name: web-server, Image: nginx, Mount path: /usr/share/nginx/html, ReadWriteOnce access on the volume.
+# using kubectl edit or kubectl patch expand the PersistentVolumeClaim to a capacity of 70Mi and record that change.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pv-volume
+spec:
+  accessModes:
+  - ReadWriteOnce    # ReadWriteOnce access on the volume, so should be same on pvc that chooses it
+  resources:
+    requests:
+      storage: 10Mi
+  storageClassName: csi-hostpath-sc
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-server
+spec:
+  volumes:
+  - name: pv-volume
+    persistentVolumeClaim:
+      claimName: pv-volume
+  containers:
+  - name: web-server
+    image: nginx
+    volumeMounts:
+    - mountPath: "/usr/share/nginx/html"
+      name: pv-volume
+      
+k patch pvc pv-volume -p '{"spec":{"resources":{"requests":{"storage":"70Mi"}}}}' --record
+# or
+k edit pvc pv-volume --record
+
+# create a redis pod with a non-persistent volume
+apiVersion: v1
+kind: Pod
+metadata:
+  name: non-persistent-redis
+  namespace: staging
+spec:
+  volumes:
+  - name: cache-control
+    emptyDir: {}
+  containers:
+  - name: redis
+    image: redis
+    volumeMounts:
+    - name: cache-control
+      mountPath: /data/redis
+      
+k get po -n staging
+
+# create a new pv called web-pv with capacity 2Gi, accessMode ReadWriteOnce, hostPath /vol/data and no storageclass
+# create a pvc in ns production named web-pvc. it requests 2Gi storage, accessMode ReadWriteOnce and no storageclass. should be bound to web-pv.
+# create a deployment in production namespace called web-deploy that mounts volume at /tmp/web-data, it's pods have image nginx:1.14.2 and it has 3 replicas
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: web-pv
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain   # default
+  hostPath:
+    path: /vol/data
+  storageClassName: ""
+  
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: web-pvc
+  namespace: production
+spec:
+  resources:
+    requests:
+      storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+
+k create deploy web-deploy --image=nginx:1.14.2 --replicas=3 --dry-run=client -o yaml > deploy.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deploy
+  namespace: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      volumes:
+        - name: web-volume
+          persistentVolumeClaim: 
+            claimName: web-pvc
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          volumeMounts:
+            - mountPath: /tmp/web-data
+              name: web-volume
+
+# a new deployment called 'alpha-mysql' has been deployed in the 'alpha' namespace. However, the pods are not running. Troubleshoot and fix the issue. The deployment should make use of the 
+# persistent volume 'alpha-pv' to be mounted at /'var/lib/mysql' and should use the environment variable 'MYSQL_ALLOW_EMPTY_PASSWORD=1' to make use of an empty root password. Do NOT alter the persistent volume.
+k describe alpha-mysql -n alpha  # its correct
+k describe pv alpha-pv # its correct
+k get pvc -n alpha # we have no pvc to bound the pv to deployment, create it in the namespace
+
+apiVersion: v1
+kind: PersistentVolumeClaim 
+metadata:
+  name: mysql-alpha-pvc
+  namespace: alpha # same ns as the deployment
+spec:
+  accessModes: # should be same as the one on pv
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi #same or smaller than pv
+  storageClassName: slow # same class as pv
+
+kubectl get deployment -n alpha
+kubectl get pv
+
+# Create a pod called 'secret-1401' in the 'admin1401' namespace using the 'busybox' image. The container within the pod should be called 'secret-admin' and should sleep for 4800 seconds.
+# The container should mount a read-only secret volume called 'secret-volume' at the path '/etc/secret-volume'. The secret being mounted has already been created for you and is called 'dotfile-secret'
+k run secret-1401 -n admin1401 --image=busybox --dry-run=client -o yaml --command -- sleep 4800 > admin.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secret-1401
+  namespace: admin1401
+  labels:
+    run: secret-1401
+spec:
+  volumes:
+  - name: secret-volume
+    secret:
+      secretName: dotfile-secret
+  containers:
+  - name: secret-admin
+    image: busybox
+    command:
+    - sleep
+    - "4800"
+    volumeMounts:
+    - name: secret-volume
+      readOnly: true
+      mountPath: "/etc/secret-volume"
+      
+#################################################################################### Service
+# Reconfigure the existing deployment front-end and add a port specification named http exposing port 80/tcp of the existing container nginx.
 # Create a new service named front-end-svc exposing the container port http.
 # Configure the new service to also expose the individual Pods via a NodePort on the nodes on which they are scheduled. => by default pods are exposed on same node if svc type is NodePort
-kubectl congfig use-context k8s
-kubectl get deployments
-kubectl edit deployment front-end
-# spec:
-#   containers:
-#   - image: nginx:1.14.2
-#     imagePullPolicy: IfNotPresent
-#     name: nginx
-#     # add here
-#     ports:
-#     - containerPort: 80
-#       protocol: TCP 
-#       name: http     
+k get deploy
+k edit deploy front-end
 
-kubectl expose deployment front-end --name=front-end-svc --port=80 --type=NodePort --protocol=TCP
-kubectl describe svc front-end-svc
+spec:
+  containers:
+  - image: nginx:1.14.2
+    imagePullPolicy: IfNotPresent
+    name: nginx
+    # add here
+    ports:
+    - containerPort: 80
+      protocol: TCP 
+      name: http     
+
+k expose deploy front-end --name=front-end-svc --port=80 --targetPort=80 --type=NodePort --protocol=TCP
+k describe svc front-end-svc  # get ip address of the service here
 curl ENDPOINT-IP:80
 
+#################################################################################### Pods
 
-# create a depployment named presentation with image nginx
-# scale the existing deployment presentation to 3 pods
-kubectl create deploy presentation --image=nginx --dry-run=client -o yaml > deploy.yaml
-kubectl apply -f deploy.yaml
-k scale deploy presentation --replicas=3
-k get deploy
+# create an static pod named "static-pod" on the "node01" node that uses the "busybox" image and the command "sleep 2000"
+k get nodes
+k run static-pod --image busybox --dry-run=client -o yaml --command -- sleep 2000 > spod.yaml
+ssh node01
+cp spod.yaml /etc/kubernetes/manifests
 
+# An existing Pod needs to be integrated into the Kubernetes built-in logging architecture (e.g. kubectl logs). Adding a streaming sidecar container is a good and common way to 
+# accomplish this requirement. Add a sidecar container named sidecar, using the busybox image, to the existing Pod big-corp-app. The new sidecar container has to run the following command:
+# /bin/sh -c "tail -n+1 -f /var/log/big-corp-app.log"
+# Use a Volume, mounted at '/var/log', to make the log file 'big-corp-app.log' available to the sidecar container.
+apiVersion: v1
+kind: Pod
+metadata: 
+  name: big-corp-app
+spec:
+  volumes:
+  - name: varlog
+    emptyDir: {}
+  containers:
+  - name: count  # original container
+    image: busybox:1.28
+    args:
+    - /bin/sh
+    - -c
+    - > 
+      i=0;
+      while true;
+      do
+      echo "$i: $(date)" >> /var/log/big-corp-app.log;
+      i=$((i+1));
+      sleep 1;
+      done
+    volumeMounts:
+    - name: varlog
+      mountPath: /var/log
+  - name: sidecar  # our new sidecar container
+    image: busybox
+    args: [/bin/sh, -c, 'tail -n+1 -f /var/log/big-corp-app.log']
+    volumeMounts:
+    - name: varlog
+      mountPath: /var/log
 
-# schedule a pod name: kucc8, consul  | app's containers: 2 | containers: nginx
+k logs big-corp-app -c sidecar
+
+# schedule a pod name: kucc8, consul  | app's containers: 2 | containers: nginx, consul
 k run kucc8 --image=nginx --dry-run=client -o yaml > app2.yaml
-vi app2.yaml
+
 apiVersion: v1
 kind: Pod
 metadata:
@@ -308,186 +624,113 @@ spec:
   - image: hashicorp/consul:latest
     name: consul
 
-k apply -f app2.yaml
-
-
-# Create a persistent volume with name app-data, of capacity 2Gi and access mode ReadOnlyMany. The type of volume is hostPath and its location is /srv/app-data. 
-vi app-data.yaml
-
-# apiVersion: v1
-# kind: PersistentVolume
-# metadata: 
-#   name: app-data
-# spec:
-#   capacity:
-#     storage: 2Gi
-#   accessModes:
-#   - ReadOnlyMany
-#   hostPath:
-#     path: "/srv/app-data"
-
-k apply -f app-data.yaml
-k get pv
-
-
-# An existing Pod needs to be integrated into the Kubernetes built-in logging architecture (e.g. kubectl logs). Adding a streaming sidecar container is a good and common way to 
-# accomplish this requirement. Add a sidecar container named sidecar, using the busybox image, to the existing Pod big-corp-app. The new sidecar container has to run the following command:
-# /bin/sh -c "tail -n+1 -f /var/log/big-corp-app.log"
-# Use a Volume, mounted at /var/log, to make the log file big-corp-app.log available to the sidecar container.
-vi side-pod.yaml
-
-# apiVersion: v1
-# kind: Pod
-# metadata: 
-#   name: big-corp-app
-# spec:
-#   containers:
-#   - name: count
-#     image: busybox:1.28
-#     args:
-#     - /bin/sh
-#     - -c
-#     - > 
-#       i=0;
-#       while true;
-#       do
-#       echo "$i: $(date)" >> /var/log/big-corp-app.log;
-#       i=$((i+1));
-#       sleep 1;
-#       done
-#     volumeMounts:
-#     - name: varlog
-#       mountPath: /var/log
-#   - name: sidecar
-#     image: busybox
-#     args: [/bin/sh, -c, 'tail -n+1 -f /var/log/big-corp-app.log']
-#     volumeMounts:
-#     - name: varlog
-#       mountPath: /var/log
-#   volumes:
-#   - name: varlog
-#     emptyDir: {}
-
-kubectl apply -f side-pod.yaml
-kubectl logs big-corp-app -c sidecar
-
-
-# Create a new PersistentVolumeClaim: 
-# Name: pv-volume | Class: csi-hostpath-sc | Capacity: 10Mi
-# Create a new Pod which mounts the PersistentVolumeClaim as a volume: Name: web-server, Image: nginx, Mount path: /usr/share/nginx/html, ReadWriteOnce access on the volume.
-# using kubectl edit or kubectl patch expand the PersistentVolumeClaim to a capacity of 70Mi and record that change.
-
-# apiVersion: v1
-# kind: PersistentVolumeClaim
-# metadata:
-#   name: pv-volume
-# spec:
-#   accessModes:
-#   - ReadWriteOnce    # ReadWriteOnce access on the volume
-#   resources:
-#     requests:
-#       storage: 10Mi
-#   storageClassName: csi-hostpath-sc
-k create -f pvc.yaml
-
-# apiVersion: v1
-# kind: Pod
-# metadata:
-#   name: web-server
-# spec:
-#   containers:
-#   - name: web-saerver
-#     image: nginx
-#     volumeMounts:
-#     - mountPath: "/usr/share/nginx/html"
-#       name: pv-volume
-#   volumes:
-#   - name: pv-volume
-#     persistentVolumeClaim:
-#       claimName: pv-volume
-k create -f pod.yaml
-k patch pvc pv-volume -p '{"spec":{"resources":{"requests":{"storage":"70Mi"}}}}' --record
-
-
-# create a new "nginx resource": name:pong, namespace:ing-internal, expose service hello on path /hello using service port 5678 => Ingress
-k config use-context k8s
-k get ns
-# in case namespace does not exist
-k create ns ing-internal
-vi ping.yaml
-
-# apiVersion: networking.k8s.io/v1
-# kind: Ingress 
-# metadata:
-#   name: pong
-#   namespace: ing-internal
-#   annotations:
-#     nginx.ingress.kubernetes.io/rewrite-target: /
-# spec:
-#   rules:
-#   - http:
-#       paths:
-#       - path: /hello
-#         pathType: Prefix
-#         backend: 
-#           service: 
-#             name: hello 
-#             port:
-#              5678
-k apply -f pong.yaml
-# or
-k create ing pong -n ing-internal --rule="/hello=hello:5678"
-k get svc -A # get the ip address
-curl -KL Internal-IP/hello
-
-
-# Create a new NetworkPolicy named allow-port-from-namespace in the existing namespace echo. Ensure that the new NetworkPolicy allows Pods in namespace internal to connect to port 9200/tcp of Pods in namespace echo. 
-# ensure that: does not allow access to Pods, which don't listen on port 9200/tcp => applied via adding the port
-# does not allow access from Pods, which are not in namespace internal => applied when selecting namespace
-k create ns echo
-k create ns internal
-k label ns internal namespace=internal  # not required
-vi np.yaml
-# apiVersion: networking.k8s.io/v1
-# kind: NetworkPolicy
-# metadata:
-#   name: allow-port-from-namespace
-#   namespace: echo
-# spec:
-#   podSelector: {}
-#   policyType:
-#   - Ingress 
-#   ingress:
-#   - from:
-#     - namespaceSelector:
-#       matchLabels:
-#         kubernetes.io/metadata.name: internal   # or namespace: internal
-#     ports:
-#     - protocol: TCP
-#       port: 9200
-
-k apply -f np.yaml
-
-
-# create a pod as follows: name: nginx-kusc00401, image: nginx, node-selector: disk=spinning
+# create a pod as follows: name: nginx-kusc00401, image: nginx, nodeSelector: disk=spinning
 k get nodes
-k label nodes my-node disk=spinning
+k label nodes my-node disk=spinning  # in case the label is NOT added to the node
 k run nginx-kusc00401 --image=nginx --dry-run=client -o yaml > nginx.yaml
-vi nginx.yaml
-# apiVersion: v1
-# kind: Pod
-# metadata:
-#   name: nginx-kusc00401
-#   labels:
-#     env: test
-# spec:
-#   containers:
-#   - name: nginx-kusc00401
-#     image: nginx
-#     nodeSelector:
-#       disk: spinning
 
-k apply -f nginx.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-kusc00401
+  labels:
+    env: test
+spec:
+  containers:
+  - name: nginx-kusc00401
+    image: nginx
+    # add it here:
+    nodeSelector:
+      disk: spinning
+
+# create a pod called non-root-pod, image: redis:alpine, runAsUser: 1000, fsGroup: 2000
+k run non-root-pod --image=redis:alpine --dry-run=client -o yaml > po.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: non-root-pod
+spec:
+  # applied to all containers in pod
+  securityContext:
+    runAsUser: 1000
+    fsGroup: 2000
+  containers:
+  - name: non-root-pod
+    image: nginx:alpine
+
+# create a new pod called "super-pod" with image "busybox:1.28" and allow the pod to be able to set "SYS_TIME". the container should sleep for 4800 seconds
+k run super-pod --image=busybox:1.28 --dry-run=client -o yaml --command -- sleep 4800 > pod.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: super-pod
+  labels:
+    run: super-pod
+spec:
+  securityContext: #  allow the pod to be able to 
+    capabilities:
+      add: ["SYS_TIME"]
+  containers:
+  - name: super-pod
+    image: busybox:1.28
+    command:
+    - sleep
+    - "4800"
+
+# create a pod "web-pod" using image "nginx" with a limit 0.5cpu and 200Mi memory and resource request of 0.1 cpu and 100 mi memory in develop namespace
+k run web-pod -n develop --dry-run=client -o yaml > pod.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-pod
+  namespace: develop
+spec:
+  containers:
+  - image: nginx
+    name: web-pod
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "100Mi"
+      limits:
+        cpu: "500m"
+        memory: "200Mi"
+
+k get po -n develop
+
+# Create a pod with image nginx called nginx and allow traffic on port 80
+k run nginx --image=nginx --restart=Never --port=80  # restart never is to keep the pod running indefinitely
+
+# Create a busybox pod that runs the command "env" and save the output to "envpod" file
+k run busybox --image=busybox --restart=Never -- /bin/sh -c 'env' 
+k logs busybox > envpod
+
+# create a pod with env variable of var1=value1 and check the environment variable inside the pod
+k run nginx --image nginx --restart=Never --env=var1=value1
+k exec nginx -- env
+# or
+k describe po nginx | grep value1
+
+# crate a pod that echo's hello world and does not restart and have it deleted when it completes
+k run busybox --image busybox -it --rm --restart=Never -- /bin/sh -c 'echo hello world'
+k get po 
+
+# create a pod named nginxpod with image nginx and label env=prod in production namespace
+k get ns
+k run nginxpod --image=nginx --labels=env=prod -n production
+k get po -n production --show-labels
+
+#################################################################################### Deployment
+
+# create a deployment named presentation with image nginx
+# scale the existing deployment presentation to 3 pods
+kubectl create deploy presentation --image=nginx --dry-run=client -o yaml > deploy.yaml
+kubectl apply -f deploy.yaml
+k scale deploy presentation --replicas=3
+k get deploy
 
 
 # scale deployment guestbook to 5 pods
@@ -527,349 +770,3 @@ k rollout history deploy nginx-deploy
 k describe deploy nginx-deploy
 # add the annotation message 'Updated nginx image to 1.17'
 kubectl annotate deployment nginx-deploy kubernetes.io/change-cause="Updated nginx image to 1.17"
-
-
-# create a pod called non-root-pod, image: redis:alpine, runAsUser: 1000, fsGroup: 2000
-k run non-root-pod --image redis:alpine --dry-run=client -o yaml > po.yaml
-vi po.yaml
-# apiVersion: v1
-# kind: Pod
-# metadata:
-#   name: non-root-pod
-# spec:
-#   # applied to all containers in pod
-#   securityContext:
-#     runAsUser: 1000
-#     fsGroup: 2000
-#   containers:
-#   - name: non-root-pod
-#     image: nginx:alpine
-
-k apply -f po.yaml
-
-
-# create a network policy that denies all ingress (incoming) traffic
-# vi policy.yaml
-# apiVersion: networking.k8s.io/v1
-# kind: NetworkPolicy
-# metadata:
-#   name: default-deny
-# spec:
-#   podSelector: {}
-#   policyType:
-#   - Ingress  # if we do not mention any specific ingress policy , all is denied!
-
-k create -f policy.yaml
-
-# create a redis pod with a non-persistent volume
-apiVersion: v1
-kind: Pod
-metadata:
-  name: non-persistent-redis
-  namespace: staging
-spec:
-  containers:
-  - name: redis
-    image: redis
-    volumeMounts:
-    - name: cache-control
-      mountPath: /data/redis
-  volumes:
-  - name: cache-control
-    emptyDir: {}
-
-k apply -f po.yaml
-k get po -n staging
-
-
-# Create a pod with image nginx called nginx and allow traffic on port 80
-k run nginx --image=nginx --restart=Never --port=80  # restart never is to keep the pod running indefinitely
-
-# Create a busybox pod that runs the command "env" and save the output to "envpod" file
-k run busybox --image busybox --restart=Never -- env > envpod.yaml
-
-# create a pod with env variable of var1=value1 and check the environment variable inside the pod
-k run nginx --image nginx --restart=Never --env=var1=value1
-k exec -it nginx -- env
-# or
-k describe po nginx | grep value1
-
-# crate a pod that echo's hello world and does not restart and have it deleted when it completes
-k run busybox --image busybox -it --rm --restart=Never -- /bin/sh -c 'echo hello world'
-k get po 
-
-# create a busybox pod and add a "sleep 3600" command
-k run busybox --image=busybox --restart=Never -- /bin/sh -c 'sleep 3600'
-
-
-
-# create apod named nginxpod with image nginx and label env=prod in production namespace
-k get ns
-k run nginxpod --image nginx --labels=env=prod -n production
-k get po -n production --show-labels
-
-
-# Ensure a single instance of pod nginx is running on each node of the Kubernetes cluster where nginx also represents the Image name which has to be used. Do not override any taints 
-# currently in place. => Use DaemonSet to complete this task and use ds-kusc00201 as DaemonSet name.
-vi ds.yaml
-# apiVersion: apps/v1
-# kind: DaemonSet
-# metadata:
-#   name: ds-kusc00201
-#   namespace: kube-system
-# spec:
-#   selector:
-#     matchLabels:
-#       app: nginx
-#   template:
-#     metadata:
-#       labels:
-#         app: nginx
-#     spec: 
-#       # this toleration basically overrides the taint of not running on master node
-#       tolerations:
-#       - key: node-role.kubernetes.io/master
-#         effect: NoSchedule
-#       containers:
-#       - name: nginx
-#         image: nginx
-
-k apply -f ds.yaml
-
-
-# create an static pod named "static-pod" on the "node01" node that uses the "busybox" image and the command "sleep 2000"
-k get nodes
-k run static-pod --image busybox --dry-run=client -o yaml --command -- sleep 2000 > spod.yaml
-cp spod.yaml /etc/kubernetes/manifests
-
-
-# create a new pod called "super-pod" with image "busybox:1.28" and allow the pod to be able to set "SYS_TIME". the container should sleep for 4800 seconds
-k run super-pod --image busybox:1.28 --dry-run=client -o yaml --command -- sleep 4800 > pod.yaml
-vi pod.yaml
-
-# apiVersion: v1
-# kind: Pod
-# metadata:
-#   name: super-pod
-#   labels:
-#     run: super-pod
-# spec:
-#   #  allow the pod to be able to 
-#   securityContext:
-#     capabilities:
-#       add: ["SYS_TIME"]
-#   containers:
-#   - name: super-pod
-#     image: busybox:1.28
-#     command:
-#     - sleep
-#     - "4800"
-
-k apply -f pod.yaml
-
-
-# use namespace project-1 for following. create DaemonSet named "daemon-imp" with image "httpd:2.4-alpine" and labels "id=daemon-imp" and "uuid=184". its pods should request 20 millicore
-# cpu and 20 mebabytes memory. the pods of the daemonset should run on ALL Nodes, including controlplanes
-k get nodes
-k get ns
-k create ns project-1
-
-# apiVersion: v1
-# kind: DaemonSet
-# metadata:
-#   name: daemon-imp
-#   namespace: project-1
-#   labels:
-#     id: daemon-imp
-#     uuid: 184
-# spec:
-#   selector:
-#     matchLabels:
-#       id: daemon-imp
-#       uuid: 184
-#   template:
-#     metadata: 
-#       labels:
-#         id: daemon-imp
-#         uuid: 184
-#     spec:
-#       tolerations:
-#       - key: node-role.kubernetes.io/master
-#         effect: NoSchedule
-#       containers:
-#       - image: httpd:2.4-alpine
-#         name: daemon-imp
-#         resources:
-#           requests:
-#             memory: "20Mi"
-#             cpu: "20m"
-
-k apply -f ds.yaml
-k get ds -n project1 -o wide
-
-# create a pod "web-pod" using image "nginx" with a limit 0.5cpu and 200Mi memory and resource request of 0.1 cpu and 100 mi memory in develop namespace
-k run web-pod -n develop --dry-run=client -o yaml > pod.yaml
-# vi pod.yaml
-# apiVersion: v1
-# kind: Pod
-# metadata:
-#   name: web-pod
-#   namespace: develop
-# spec:
-#   containers:
-#   - image: nginx
-#     name: nginx
-#     resources:
-#       requests:
-#         cpu: "100m"
-#         memory: "100Mi"
-#       limits:
-#         cpu: "500m"
-#         memory: "200Mi"
-
-k apply -f pod.yaml
-k get po -n develop
-
-# you have a cluster with pods in many namespaces. "db pods" in project-a namespace should only be acceesible from "service pods" that are running in project-b namespace => create networkPolicy
-k get po -n project-a --show-labels
-k get po -n project-b --show-labels
-vi np.yaml
-# apiVersion: networking.k8s.io/v1
-# kind: NetworkPolicy
-# metadata:
-#   name: allow-service-to-db
-#   namespace: project-a
-#   spec:
-#     podSelector:
-#       matchLabels:
-#         app: db # Assuming your db pods have a label "app=db"
-#     PolicyTypes:
-#       - Ingress
-#     ingress:
-#       - from:
-#           - namespaceSelector:
-#             matchLabels:
-#               name: project-b  # Allow access from project-b namespace
-#           - podSelector:
-#               matchLabels:
-#                 app: service  # Allow access from pods with label app=service in project-b namespace
-
-apply -f np.yaml
-
-# create a new pv called web-pv with capacity 2Gi, accessMode ReadWriteOnce, hostPath /vol/data and no storageclass
-# create a pvc in ns production named web-pvc. it requests 2Gi storage, accessMode ReadWriteOnce and no storageclass. should be bound to web-pv.
-# create a deployment in production namespace called web-deploy that mounts volume at /tmp/web-data, it's pods have image nginx:1.14.2 and it has 3 replicas
-# ---
-# apiVersion: v1
-# kind: PersistentVolume
-# metadata:
-#   name: web-pv
-# spec:
-#   capacity:
-#     storage: 2Gi
-#   accessModes:
-#     - ReadWriteOnce
-#   persistentVolumeReclaimPolicy: Retain
-#   hostPath:
-#     path: /vol/data
-#   storageClassName: ""
-  
-# ---
-# apiVersion: v1
-# kind: PersistentVolumeClaim
-# metadata:
-#   name: web-pvc
-#   namespace: production
-# spec:
-#   resources:
-#     requests:
-#       storage: 2Gi
-#   accessModes:
-#     - ReadWriteOnce
-#   storageClassName: ""
-
-k create deploy web-deploy --image=nginx:1.14.2 --replicas=3 --dry-run=client -o yaml > deploy.yaml
-# ---
-# apiVersion: apps/v1
-# kind: Deployment
-# metadata:
-#   name: web-deploy
-#   namespace: production
-# spec:
-#   replicas: 3
-#   selector:
-#     matchLabels:
-#       app: web
-#   template:
-#     metadata:
-#       labels:
-#         app: web
-#     spec:
-#       volumes:
-#         - name: web-volume
-#           persistentVolumeClaim: 
-#             claimName: web-pvc
-#       containers:
-#         - name: nginx
-#           image: nginx:1.14.2
-#           volumeMounts:
-#             - mountPath: /tmp/web-data
-#               name: web-volume
-
-
-
-
-#########################################################
-
-### A new deployment called 'alpha-mysql' has been deployed in the 'alpha' namespace. However, the pods are not running. Troubleshoot and fix the issue. The deployment should make use of the 
-# persistent volume 'alpha-pv' to be mounted at /'var/lib/mysql' and should use the environment variable 'MYSQL_ALLOW_EMPTY_PASSWORD=1' to make use of an empty root password. Do NOT alter the persistent volume.
-kubectl describe alpha-mysql -n alpha  # its correct
-kubectl describe pv alpha-pv # its correct
-kubectl get pvc -n alpha # we have no pvc to bound the pv to deployment, create it in the namespace
-vi pvc-alpha.yaml
-# apiVersion: v1
-# kind: PersistentVolumeClaim 
-# metadata:
-#   name: mysql-alpha-pvc
-#   namespace: alpha # same ns as the deployment
-# spec:
-#   accessModes: # should be same as the one on pv
-#   - ReadWriteOnce
-#   resources:
-#     requests:
-#       storage: 1Gi #same or smaller than pv
-#   storageClassName: slow # same class as pv
-
-kubectl apply -f pvc-alpha.yaml
-kubectl get deployment -n alpha
-kubectl get pv
-
-
-### Create a pod called 'secret-1401' in the 'admin1401' namespace using the 'busybox' image. The container within the pod should be called 'secret-admin' and should 'sleep' for '4800' seconds.
-# The container should mount a 'read-only secret volume' called 'secret-volume' at the path '/etc/secret-volume'. The secret being mounted has already been created for you and is called 'dotfile-secret'
-kubectl run secret-1401 -n admin1401 --image=busybox --dry-run=client -o yaml --command -- sleep 4800 > admin.yaml
-vi admin.yaml
-# apiVersion: v1
-# kind: Pod
-# metadata:
-#   name: secret-1401
-#   namespace: admin1401
-#   labels:
-#     run: secret-1401
-# spec:
-#   volumes:
-#   - name: secret-volume
-#     secret:
-#       secretName: dotfile-secret
-#   containers:
-#   - name: secret-admin
-#     image: busybox
-#     command:
-#     - sleep
-#     - "4800"
-#     volumeMounts:
-#     - name: secret-volume
-#       readOnly: true
-#       mountPath: "/etc/secret-volume"
-
-kubectl apply -f admin.yaml
