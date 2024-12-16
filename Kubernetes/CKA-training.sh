@@ -7,18 +7,58 @@
 k config use-context mk8s
 k cordon mk8s-master-0
 k drain mk8s-master-0 --ignore-daemonsets
-k get nodes
+k get nodes  # make sure its drained and unschedulable
 ssh mk8s-master-0
 sudo -i
-sudo apt-mark unhold kubeadm sudo apt-get update && sudo apt-get install -y kubeadm='1.32.x-*' && sudo apt-mark hold kubeadm
+# start the upgrade process
+apt-mark unhold kubeadm  # unlock the version
+apt-get update 
+apt-cache show kubeadm | grep 1.30  # find correct version
+apt-get install -y kubeadm='1.32.x-*'
+sudo apt-mark hold kubeadm # lock the version again
 kubeadm version
-sudo kubeadm upgrade plan
-sudo kubeadm upgrade apply v1.32.x --etcd-upgrade=false --skip-phases=addon/coredns
-sudo apt-mark unhold kubelet kubectl && sudo apt-get update && sudo apt-get install -y kubelet='1.32.x-*' kubectl='1.32.x-*' && sudo apt-mark hold kubelet kubectl
-sudo systemctl daemon-reload
-sudo systemctl restart kubelet
+kubeadm upgrade plan
+kubeadm upgrade apply v1.32.x --etcd-upgrade=false --skip-phases=addon/coredns
+# upgrade kubectl and kubelet on master node
+apt-mark unhold kubelet kubectl 
+apt-get update && sudo apt-get install -y kubelet='1.32.x-*' kubectl='1.32.x-*'
+apt-mark hold kubelet kubectl
+k version 
+kubelet --version
+systemctl daemon-reload
+systemctl restart kubelet
 exit
 k uncordon mk8s-master-0
+k get nodes
+
+# worker-node3 is running an earlier version of the Kubernetes software. Perform an upgrade on worker-node3 and ensure that it is running the exact same version as used on 
+# the control-plane and other worker nodes (those nodes are already upgraded)
+k get nodes -o wide
+ssh controlplane 
+kubeadm --version 
+k cordon worker-node-3
+k drain worker-node-3 --ignore-daemonsets
+k get nodes
+ssh worker-node-3
+sudo -i
+# start the upgrade process
+apt-mark unhold kubeadm
+apt-cache show kubeadm | grep 1.30
+apt-get install -y kubeadm=1.30.1-1.1
+apt-mark hold kubeadm
+kubeadm version -o short
+kubeadm upgrade node     # kubeadm upgrade apply v1.32.x => difference with master node, Also calling kubeadm upgrade plan and upgrading the CNI provider plugin is no longer needed
+# upgrade kubelet and kubectl on worker node
+apt-get update
+apt-mark unhold kubectl kubelet
+apt-get install -y kubectl=1.30.1-1.1 kubelet=1.30.1-1.1
+apt-mark hold kubectl kubelet
+k version 
+kubelet --version
+systemctl daemon-reload
+systemctl restart kubelet
+exit
+k uncordon worker-node-3
 k get nodes
 
 #################################################################################### Join Node to cluster
@@ -36,14 +76,21 @@ systemctl start kubelet
 systemctl status kubelet
 exit
 ssh controlplane
-kubectl get nodes
-kubectl run web --image=nginx
-kubectl get pods
+k get nodes
+k run web --image=nginx
+k get po
 
 #################################################################################### ETCD Backup Restore
 # create a snapshot of the existing etcd instance running at https://127.0.0.1:2379, saving the snapshot to /var/lib/backup/etcd-snapshot.db
 # ca certificate => /opt/kuin/ca.crt   client-certificate => /opt/kuin/etcd-client.crt  client-key => /opt/kuin/etcd-client.key
-ETCDCTL_API=3 etcdctl --endpoints 127.0.0.1:2379 --cacert=/opt/kuin/ca.crt --cert=/opt/kuin/etcd-client.crt --key=/opt/kuin/etcd-client.key snapshot save /var/lib/backup/etcd-snapshot.db
+
+ssh controlplane
+k get po -n kube-system # make sure there is a pod related to etcd here, it means that it is on this node
+sudo -i  # backup can only be performed when you are root user
+cat /etc/kubernetes/manifests/etcd.yaml  # find the folder with etcd certificates
+ls -la /etc/kubernetes/pki/etcd
+# --endpoints 127.0.0.1:2379  => since we are on same node this is NOT required here
+ETCDCTL_API=3 etcdctl --endpoints 127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /var/lib/backup/etcd-snapshot.db
 
 # restore an existing, previous snapshot located at /var/lib/backup/etcd-snapshot-previous.db
 ls /var/lib
@@ -60,6 +107,31 @@ vi /etc/kubernetes/manifests/etcd.yaml
 # take the backup of the ETCD at the location "/opt/etcd-backup.db" on the "controlplane" node
 export ETCDCTL_API=3
 etcdctl snapshot save --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --endpoint=127.0.0.1:2379 /opt/etcd-backup.db
+
+#################################################################################### Certificates
+# analyze and document all X509 certificates currently being used within the provided cluster using just the kubeadm tool
+# update and renew the expiry date within the TLS certificate used by the Kubernetes API server
+ssh controlplane
+sudo -i
+kubeadm certs check-expiration
+# CERTIFICATE                EXPIRES                  RESIDUAL TIME   CERTIFICATE AUTHORITY   EXTERNALLY MANAGED
+# admin.conf                 Jun 26, 2025 14:36 UTC   191d            ca                      no      
+# apiserver                  Jun 26, 2025 14:36 UTC   191d            ca                      no      
+# apiserver-etcd-client      Jun 26, 2025 14:36 UTC   191d            etcd-ca                 no      
+# apiserver-kubelet-client   Jun 26, 2025 14:36 UTC   191d            ca                      no  
+
+# Now renew the API server certificate:
+kubeadm certs renew apiserver
+    # Certificate:
+    #     Data:
+    #         Validity
+    #             Not Before: Jun 26 14:31:52 2024 GMT
+    #             Not After : Dec 16 18:06:55 2025 GMT
+    #         Subject: CN = kube-apiserver
+
+
+# make sure the renew process has applied correctly
+echo | openssl s_client -connect 10.0.0.100:6443 2>/dev/null | openssl x509 -text
 
 #################################################################################### Cluster Troubleshooting
 # a kubeconfig file called "admin.kubeconfig" has been created in /root/CKA . there is something wrong with the configuration. troubleshoot and fix it
@@ -128,8 +200,42 @@ k get cm codedns -n kube-system
 #     ttl 30   ###### 
 # }
 
-# Determine whether there are any pods running on the cluster that are not using CoreDNS for DNS resolution ??
+# Determine whether there are any pods running on the cluster that are not using CoreDNS for DNS resolution ?
 k get po -A -o=custom-columns=NodeName:.metadata.name,DNSPOLICY:.spec.dnsPolicy
+
+# Determine the Pod CIDR range used by the cluster.
+k get cm kube-proxy -n kube-system -o yaml | grep -i cidr  # 192.168.0.0/16
+
+# Determine the Service CIDR range used by the cluster.
+k get po kube-apiserver-xxx-xxx -n kube-system -o yaml | grpe -i "service-cluster-ip-range"  # - --service-cluster-ip-range=10.96.0.0/12
+
+# Determine worker node1's Pod capacity (cluster-node1 - 10.0.0.10)
+k describe node node01 | grep pods  # pods: 110
+
+# Determine which CNI provider is currently being used, and how IPAM has been configured for the pod network.
+ssh controlplane
+sudo -i
+ls /opt/cni/bin  # lists all available CNI and installed one
+cat /etc/cni/net.d/10-calico.conflist 
+# "ipam": {
+#     "type": "calico-ipam"
+
+# One of the cluster's worker nodes hasn't yet correctly registered. You need to investigate and fix this issue.
+ssh worker-node
+systemctl status kubelet
+journalctl -u kubelet
+# error related to address of kubelet
+        # kubelet.service: Failed to locate executable /usr/etc/kubelet: No such file or directory
+        # kubelet.service: Failed at step EXEC spawning /usr/etc/kubelet: No such file or directory
+which kubelet # shows correct address for kubelet
+vi /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
+# edit this line
+ExecStart=/usr/...
+
+systemctl daemon-reload
+systemctl start kubelet
+systemctl status kubelet
+
 
 
 # Taint the worker node to be Unschedulable. Once done, create a pod called dev-redis, image redis:alpine to ensure workloads are not scheduled to this worker node. Finally, 
