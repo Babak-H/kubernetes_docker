@@ -725,48 +725,40 @@ k get po -n production --show-labels
 
 #################################################################################### Deployment
 
-# create a deployment named presentation with image nginx
+# create a deployment named 'presentation' with image nginx
 # scale the existing deployment presentation to 3 pods
-kubectl create deploy presentation --image=nginx --dry-run=client -o yaml > deploy.yaml
-kubectl apply -f deploy.yaml
+k create deploy presentation --image=nginx --dry-run=client -o yaml | k apply -f -
 k scale deploy presentation --replicas=3
 k get deploy
 
-
-# scale deployment guestbook to 5 pods
-k config use-context k8s
-k scale deploy guestbook --replicas=5
-
-# create a deployment called nginx-deploy with image nginx:1.16 and 1 replica. record the version then upgrade the version of image to 1.17 via rolling update and record the change
+# create a deployment called nginx-deploy with image nginx:1.16 and 1 replica. Record the version then upgrade the version of image to 1.17 via rolling update and record the change
 k create deploy nginx-deploy --image=nginx:1.16 --replicas=1 --dry-run=client -o yaml > deploy.yaml
-vi deploy.yaml
-# apiVersion: apps/v1
-# kind: Deployment 
-# metadata: 
-#   name: nginx-deploy
-#   labels:
-#     app: nginx
-# spec: 
-#   replicas: 1
-#   selector:
-#     matchLabels:
-#       app: nginx
-#   template:
-#     metadata:
-#       labels:
-#         app: nginx
-#     spec: 
-#       containers:
-#       - name: nginx
-#         image: 1.17 # update this
-#         ports:
-#         - containerPort: 80
-k apply -f deploy.yaml --record # record the version then upgrade the version of image to 1.17
-k get deploy
-k rollout history deploy nginx-deploy
-# or
-k set image deployment/nginx-deploy nginx=1.17 --record
+
+apiVersion: apps/v1
+kind: Deployment 
+metadata: 
+  name: nginx-deploy
+  labels:
+    app: nginx
+spec: 
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec: 
+      containers:
+      - name: nginx
+        image: 1.16
+        ports:
+        - containerPort: 80
+
+k apply -f deploy.yaml --record 
+k set image deployment/nginx-deploy nginx=1.17 --record  # or edit it via "k edit deploy nginx-deploy --record"
 k rollout history deploy nginx-deploy
 k describe deploy nginx-deploy
 # add the annotation message 'Updated nginx image to 1.17'
-kubectl annotate deployment nginx-deploy kubernetes.io/change-cause="Updated nginx image to 1.17"
+k annotate deploy nginx-deploy kubernetes.io/change-cause="Updated nginx image to 1.17"
