@@ -11,11 +11,11 @@ k get nodes  # make sure its drained and unschedulable
 ssh mk8s-master-0
 sudo -i
 # start the upgrade process
-apt-mark unhold kubeadm  # unlock the version
+apt-mark unhold kubeadm  # when you are ready to upgrade kubeadm to newer versions manually, you can unlock the old, basically un-freezing package version
 apt-get update 
-apt-cache show kubeadm | grep 1.30  # find correct version
-apt-get install -y kubeadm='1.32.x-*'
-sudo apt-mark hold kubeadm # lock the version again
+apt-cache show kubeadm | grep 1.30  # display detailed information about a specific package available in the APT package repository on Debian-based systems, showing it's different versions | find correct version
+apt-get install -y kubeadm='1.32.x-*' # -y flag => automatically answer "yes" to any prompts that might appear during the installation process, allowing running the command from a script
+sudo apt-mark hold kubeadm # o prevent the specified packages (kubeadm here) from being automatically upgraded when you run system updates, freezes package version
 kubeadm version
 kubeadm upgrade plan
 kubeadm upgrade apply v1.32.x --etcd-upgrade=false --skip-phases=addon/coredns
