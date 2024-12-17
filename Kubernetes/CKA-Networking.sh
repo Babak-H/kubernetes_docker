@@ -184,3 +184,7 @@ openssl genrsa -out apiserver.key 2048
 openssl req -key apiserver.key -subj “/CN=kube-apiserver” -out apiserver.csr -config openssl.cnf
 # here we use the public and private keys from certificate authority, and sign the request
 openssl x509 -req -in apiserver.csr -CA ca.crt -CAkey ca.key -out apiserver.crt
+
+# difference between "sudo -i" and "sudo -s"
+sudo -i  # The -i option stands for "login shell." When you use sudo -i, it simulates a full login as the target user (by default, the root user). simulate a full login session for the target user, losing you current folder and setting
+sudo -s  # The -s option stands for "shell." When you use sudo -s, it opens a shell with elevated privileges but retains the current user's environment and maintain your current environment settings and working directory.
