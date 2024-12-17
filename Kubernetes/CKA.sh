@@ -409,6 +409,8 @@ ps -aux | grep kubelet | grep container-runtime-endpoint
 # --kubeconfig=/etc/kubernetes/kubelet.conf --config=/var/lib/kubelet/config.yaml --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock \
 # --pod-infra-container-image=registry.k8s.io/pause:3.10
 
+# CNI = Container Network Interface, a specification and a set of libraries for configuring network interfaces in Linux containers. CNI is used primarily in container orchestration platforms like Kubernetes to manage the networking aspects of containers
+
 # What is the path configured with all binaries of CNI supported plugins?
 # all plugins are stored at /opt/cni/bin
 ls /opt/cni/bin
@@ -834,6 +836,12 @@ curl https://raw.githubusercontent.com/projectcalico/calico/v3.25.0/manifests/ca
 # Apply the manifest using the following command.
 k apply -f calico.yaml
 # Calico is said to have most advanced cni network plugin.
+
+# IPAM = IP Address Management, deals with the planning, tracking, and managing of IP address space within a network.
+# IPAM is responsible for assigning IP addresses to pods in a Kubernetes cluster
+# IP Address Allocation: Calico's IPAM is responsible for allocating IP addresses to pods when they are created. It ensures that each pod receives a unique IP address from a predefined IP pool.
+# IP Pools: Calico allows you to define IP pools, which are ranges of IP addresses that can be used for pod networking. You can configure multiple IP pools and specify which pools should be used for different namespaces or workloads.
+# IPAM Modes: Calico supports different IPAM modes, such as: Calico IPAM: The default mode, where Calico manages IP address allocation and ensures efficient use of IP address space , HostLocal IPAM: An alternative mode where IP addresses are allocated from a local range on each node, rather than a global pool.
 
 # **Troubleshooting Test 1:** A simple 2 tier application is deployed in the triton namespace. It must display a green web page on success. Click on the app tab
 # at the top of your terminal to view your application. It is currently failed. Troubleshoot and fix the issue.
