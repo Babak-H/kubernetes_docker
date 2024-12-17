@@ -312,6 +312,29 @@ k exec busybox -- nslookup nginx-resolver-service.default.svc.cluster.local > /r
 k exec busybox -- nslookup 10-244-192-2.default.pod.cluster.local > /root/CKA/nginx.pod
 # https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#a-aaaa-records-1
 
+# Taint the worker node node01 to be Unschedulable. Once done, create a pod called dev-redis, image redis:alpine, to ensure workloads are not scheduled to this worker node. 
+# Finally, create a new pod called prod-redis and image: redis:alpine with toleration to be scheduled on node01.
+# key: env_type, value: production, operator: Equal and effect: NoSchedule
+k taint nodes node01 env_type=production:NoSchedule
+k run dev-redis -image=redis:alpine
+k get po -o wide  # scheduled on another node
+k run prod-redis -image=redis:alpine --dry-run=client -o yaml > po4. yaml
+apiVersion: v1
+kind: Pod
+metadata:
+    labels:
+        run: prod-redis
+    name: prod-redis
+spec:
+    containers:
+    - image: redis:alpine
+      name: prod-redis
+    tolerations:
+    - key: "env_type"
+      operator: "Equal"
+      value: "production"
+      effect: "NoSchedule"
+      
 #################################################################################### custom json values
 # Check to see how many nodes are ready (not including nodes tainted NoSchedule) and write the number to /opt/KUSC00402/kusc00402.txt.
 echo $(k get nodes --no-headers | grep -v 'NoSchedule' | grep -c 'Ready' | wc -l ) > opt/KUSC00402/kusc00402.txt
