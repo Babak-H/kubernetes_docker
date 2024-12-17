@@ -223,7 +223,7 @@ cat /etc/cni/net.d/10-calico.conflist
 # One of the cluster's worker nodes hasn't yet correctly registered. You need to investigate and fix this issue.
 ssh worker-node
 systemctl status kubelet
-journalctl -u kubelet
+journalctl -u kubelet -n 10  # shows last 10 lines
 # error related to address of kubelet
         # kubelet.service: Failed to locate executable /usr/etc/kubelet: No such file or directory
         # kubelet.service: Failed at step EXEC spawning /usr/etc/kubelet: No such file or directory
