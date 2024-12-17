@@ -134,6 +134,12 @@ kubeadm certs renew apiserver
 echo | openssl s_client -connect 10.0.0.100:6443 2>/dev/null | openssl x509 -text
 
 #################################################################################### Cluster Troubleshooting
+
+# kubelet configuration file is usaully located at one of these locations:
+# 1. /var/lib/kubelet/config.yaml
+# 2. /etc/systemd/system/kubelet.service or /usr/lib/systemd/system/kubelet.service
+# 3. /etc/default/kubelet or etc/sysconfig/kubelet
+
 # a kubeconfig file called "admin.kubeconfig" has been created in /root/CKA . there is something wrong with the configuration. troubleshoot and fix it
 # make sure the port for kube-apiserver is correct. correct port number is "6443"
 k cluster-info --kubeconfig=/root/CKA/admin.kubeconfig
