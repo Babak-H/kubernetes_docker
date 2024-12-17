@@ -299,6 +299,17 @@ kubectl get pods -o wide
 echo journalctl -u kubelet >> /home/ubuntu/kubelet.sh
 echo k logs kube-scheduler-ip-10-0-0-100.us-west-2.compute.internal -n kube-system >> /home/ubuntu/scheduler.sh
 
+# Create a nginx pod called nginx-resolver using image nginx, expose it internally with a service called nginx-resolver-service. Test that you are able to look up 
+# the service and pod names from within the cluster. Use the image: busybox: 1.28 for dns lookup. Record results in /root/KA/nginx.svc and /root/CKA/nginx.pod
+k run nginx-resolver --image=nginx
+k expose po ngnix-resolver --name=nginx-resolver-service --port=80
+k describe svc nginx-resolver-service # find its IP address
+k get po nginx-resolver -o wide # get it's ip address
+# only way to get logs from the pod to outside is run it in background, then exec to it and export results to some file
+k run busybox --image busybox:1.28 -- sleep 4800
+# since we are all on same namespace it can also be only : nginx-resolver-service
+k exec busybox -- nslookup nginx-resolver-service.default.svc.cluster.local > /root/KA/nginx.svc
+k exec busybox -- nslookup 10-244-192-2.default.pod.cluster.local > /root/CKA/nginx.pod
 
 #################################################################################### custom json values
 # Check to see how many nodes are ready (not including nodes tainted NoSchedule) and write the number to /opt/KUSC00402/kusc00402.txt.
