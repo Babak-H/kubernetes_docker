@@ -310,6 +310,7 @@ k run busybox --image busybox:1.28 -- sleep 4800
 # since we are all on same namespace it can also be only : nginx-resolver-service
 k exec busybox -- nslookup nginx-resolver-service.default.svc.cluster.local > /root/KA/nginx.svc
 k exec busybox -- nslookup 10-244-192-2.default.pod.cluster.local > /root/CKA/nginx.pod
+# https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#a-aaaa-records-1
 
 #################################################################################### custom json values
 # Check to see how many nodes are ready (not including nodes tainted NoSchedule) and write the number to /opt/KUSC00402/kusc00402.txt.
