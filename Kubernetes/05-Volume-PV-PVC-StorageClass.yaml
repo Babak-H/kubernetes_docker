@@ -1,3 +1,21 @@
+# Create a Pod called redis-storage with image: redis:alpine with a Volume of type emptyDir that lasts for the life of the Pod.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: redis-storage
+  namespace: redis-ns
+spec:
+  volumes:
+    - name: temp-vol
+      emptyDir:
+        medium: Memory
+  containers:
+  - image: redis:alpine
+    name: redis-storage
+    volumeMounts:
+      - name: temp-vol
+        mountPath: "/data/redis"
+
 # Pod with Volumes defined inside it
 ---
 apiVersion: v1
