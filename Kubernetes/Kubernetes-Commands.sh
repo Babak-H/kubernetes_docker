@@ -295,6 +295,16 @@ k logs busybox # to see the results of the command
 k run busybox --image=busybox --command -- /bin/sh -c echo "hello"
 # but this will work, after -C we need "" or ''
 k run busybox1 --image=busybox --command -- /bin/sh -c 'echo "hello"'
+
+# In this command, echo 'hi' is treated as an argument to the default entry point of the nginx image. The nginx image has a default entry point that starts the Nginx server,
+# and the echo 'hi' is passed as an argument to this entry point. However, since the Nginx server does not recognize echo 'hi' as a valid argument, the container will likely
+# fail to start or exit immediately.
+k run nginx --image=nginx -- echo 'hi'
+
+# In this command, the --command option tells Kubernetes to override the default entry point of the container with the command specified after -- , This means that instead 
+# of starting the Nginx server, the container will execute echo 'hi' as the main command. As a result, the container will start, execute the echo 'hi' command, print 
+# "hi" to the standard output, and then exit.
+k run nginx --image=nginx --command -- echo 'hi'
 ##### ReplicaSet ##########################################################################
 
 k get replicaset new-replicaset -o wide
