@@ -108,7 +108,7 @@ vi /etc/kubernetes/manifests/etcd.yaml
 export ETCDCTL_API=3
 etcdctl snapshot save --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --endpoint=127.0.0.1:2379 /opt/etcd-backup.db
 
-#################################################################################### Certificates
+#################################################################################### Certificates and Users
 # analyze and document all X509 certificates currently being used within the provided cluster using just the kubeadm tool
 # update and renew the expiry date within the TLS certificate used by the Kubernetes API server
 ssh controlplane
@@ -132,6 +132,32 @@ kubeadm certs renew apiserver
 
 # make sure the renew process has applied correctly
 echo | openssl s_client -connect 10.0.0.100:6443 2>/dev/null | openssl x509 -text
+
+
+# Create a new user called john. Grant him access to the cluster. John should have permission to create, list, get, update and delete pods in the development namespace. 
+# The private key exists in the location: /root/CKA/john.key and csr at /root/CKA/john.csr.
+# https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/#create-certificatessigningrequest
+
+cat /root/CKA/john.csr | base64 | tr -d "\n"  # copy the encrypted value value
+# create the certificate signing request file and apply it
+    apiVersion: certificates.k8s.io/v1
+    kind: CertificateSigningRequest
+    metadata:
+        name: john
+    spec:
+        request: ...
+        signerName: https://kubernetes.io/kube-apiserver-client
+        usage: 
+        - client auth 
+        
+k create -f csr.yaml
+k get csr # john should be pending
+k certificate approve john
+k get csr # john should be approved
+
+k create role developer -verb=create,list,get,update,delete —resource=pods -n development
+k create rolebinding dev-john-role --role=developer --user=john -n development  # bound Role developer to user john
+k auth can-i get pods --as=john -n development
 
 #################################################################################### Cluster Troubleshooting
 
@@ -279,6 +305,8 @@ echo k logs kube-scheduler-ip-10-0-0-100.us-west-2.compute.internal -n kube-syst
 echo $(k get nodes --no-headers | grep -v 'NoSchedule' | grep -c 'Ready' | wc -l ) > opt/KUSC00402/kusc00402.txt
 # or
 k get nodes -o=custom-columns=NodeName:.meta.name,TaintKey:.spec.taints[*].key,TaintValue:.spec.taints[*].value,TaintEffect:.spec.taints[*].effect # then manually add all ready ones to the file 
+# .items does not need to be included
+k get nodes -o=custom-columns=OSIMAGE:.status.nodeInfo.osImage --no-header > /opt/outputs/os-list.txt
 
 # From the pod label name=overloaded-cpu, find pods running high CPU workloads and write the name of the pod consuming most CPU to the file /opt/KUTR00401/KUTR00401.txt (which already exists)
 k top pod -l name=overloaded-cpu --sort-by=cpu 
@@ -742,6 +770,8 @@ k get nodes
 k run static-pod --image busybox --dry-run=client -o yaml --command -- sleep 2000 > spod.yaml
 ssh node01
 cp spod.yaml /etc/kubernetes/manifests
+# or
+k run static-busybox --image=busybox --dry-run=client -o yaml --command -- sleep 1000 > /etc/kubernetes/manifests/pod.yaml
 
 # Create a kubectl command that lists out all static pod names currently running within the cluster. Run the kubectl command and save the output directly into 
 # the following file /home/ubuntu/static-pods/report.txt on the bastion node.
