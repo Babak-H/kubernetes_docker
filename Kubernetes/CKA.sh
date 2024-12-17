@@ -10,6 +10,10 @@
 # kube-controller-manager => 10252
 # etcd => 2379-2380
 
+# drain vs cordon
+# Cordon => used to mark a node as unschedulable. This means that no new pods will be scheduled on the node, but existing pods will continue to run.
+# Drain => used to safely evict all pods from a node. This prepares the node for maintenance or decommissioning by ensuring that all workloads are moved elsewhere.
+# first cordon, then drain
 
 # untaint node
 k taint nodes controlplane node-role.kubernetes.io/control-plane:NoSchedule-
