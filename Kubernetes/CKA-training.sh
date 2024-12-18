@@ -159,6 +159,9 @@ k create role developer -verb=create,list,get,update,delete —resource=pods -n 
 k create rolebinding dev-john-role --role=developer --user=john -n development  # bound Role developer to user john
 k auth can-i get pods --as=john -n development
 
+# associate a serviceAccount with a deployment
+k set serviceaccount deploy/web-dashboard dashboard-sa
+
 #################################################################################### Cluster Troubleshooting
 
 # kubelet configuration file is usaully located at one of these locations:
@@ -268,8 +271,6 @@ systemctl daemon-reload
 systemctl start kubelet
 systemctl status kubelet
 
-
-
 # Taint the worker node to be Unschedulable. Once done, create a pod called dev-redis, image redis:alpine to ensure workloads are not scheduled to this worker node. Finally, 
 # create a new pod called prod-redis and image redis:alpine with toleration to be scheduled on node01. 
 k get nodes -o wide
@@ -294,7 +295,6 @@ kubectl apply -f pod-redis.yaml
         value: prodcution
 
 kubectl get pods -o wide 
-
 
 echo journalctl -u kubelet >> /home/ubuntu/kubelet.sh
 echo k logs kube-scheduler-ip-10-0-0-100.us-west-2.compute.internal -n kube-system >> /home/ubuntu/scheduler.sh
@@ -334,7 +334,10 @@ spec:
       operator: "Equal"
       value: "production"
       effect: "NoSchedule"
-      
+
+# access the kubernetes resources via an specific KubeConfig
+k get nodes --kubeconfig=/root/CKA/super.kubeconfig  # if there is an error, you will see it here
+
 #################################################################################### custom json values
 # Check to see how many nodes are ready (not including nodes tainted NoSchedule) and write the number to /opt/KUSC00402/kusc00402.txt.
 echo $(k get nodes --no-headers | grep -v 'NoSchedule' | grep -c 'Ready' | wc -l ) > opt/KUSC00402/kusc00402.txt
@@ -521,6 +524,8 @@ spec:
                 name: web-svc
                 port:
                   number: 80
+
+k create ingress ingress-pay -n critical-space --rule="wear*=wear-service:80" --dry-run=client -o yaml > ing.yaml
 
 #################################################################################### DaemonSets
 # Ensure a single instance of pod nginx is running on each node of the Kubernetes cluster where nginx also represents the Image name which has to be used. Do not override any taints 
@@ -775,7 +780,10 @@ allowVolumeExpansion: false
 volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: gp2
-      
+
+# get pvc events
+k -n earth describe pvc earth-project-earthflower-pvc  # event section is at the end
+
 #################################################################################### Service
 # Reconfigure the existing deployment front-end and add a port specification named http exposing port 80/tcp of the existing container nginx.
 # Create a new service named front-end-svc exposing the container port http.
