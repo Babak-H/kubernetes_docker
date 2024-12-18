@@ -1074,3 +1074,6 @@ k describe deploy nginx-deploy
 k annotate deploy nginx-deploy kubernetes.io/change-cause="Updated nginx image to 1.17"
 
 kubectl rollout undo deployment/apache-deployment -n qq3
+
+# deployment does NOT have --command flag, use -- instead
+k create deploy reddit-1 --image=reddit:alpine -n web --replicas=2 --dry-run=client -o yaml -- sleep '4h' > deploy.yaml 
