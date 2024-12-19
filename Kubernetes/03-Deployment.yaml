@@ -240,3 +240,28 @@ spec:
         - name: redis-config
           configMap:
             name: redis-config
+
+# Enabling debug logs is done by appending —-verbosity=debug to the command of the main container in the deployment k8s yaml:
+k edit deployment my-deploy -n my-ns
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: my-deploy
+  namespace: my-ns
+spec:
+  selector:
+    matchLabels:
+      app: my-deploy
+  template:
+    metadata:
+      labels:
+        app: my-deploy
+    spec:
+      containers:
+        - name: my-deploy
+          image: elastic:latest
+          command:
+          - --verbosity=debug
+          
+k rollout restart deploy my-deploy
