@@ -1033,6 +1033,10 @@ spec:
             name: credentials
             key: username
 
+# move static pod from one node to another
+ssh controlplane
+scp /etc/kubernetes/manifests/my-sp.yaml node01:/etc/kubernetes/manifests/my-sp.yaml
+
 #################################################################################### Deployment
 
 # create a deployment named 'presentation' with image nginx
