@@ -428,5 +428,24 @@ spec:
   - name: for-loop-container
     image: busybox
     command: ["/bin/sh", "-c", "for word in 1 2 3 4 5; do echo $word; done"]
-  restartPolicy: OnFailure
-  
+    restart: OnFailure
+
+
+# in kubernetes "&labels" in yaml file is an alias that allows you to define a set of values and then reuse them several times in the same file.
+# Anchor &  => define the reusable values
+# Alias *   => refrence the created anchor of labels
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-pod
+  labels: &labels
+    app: my-app
+    tier: frontend
+spec:
+  containers:
+  - name: my-container
+    image: my-image
+  - name: anothet-container
+    image: another-image
+  labels: *labels
