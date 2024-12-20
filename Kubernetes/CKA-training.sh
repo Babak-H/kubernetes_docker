@@ -67,13 +67,16 @@ k get nodes
 k get nodes
 ssh controlplane # in case we are not on master node
 kubeadm token create --print-join-command  # save the output command and use it on node01
+
 ssh node01
 sudo -i
 kubeadm join 172.30.1.2:6443 --token sfbhsu.llclabbyggkogg9q --discovery-token-ca-cert-hash sha256:4382fe27b4d9a6e4115fb22fb315f4687e355909e76e66ee46a6bde485877464
+
 # if there is any error here check the kubelet
-systemctl status kubelet
-systemctl start kubelet
-systemctl status kubelet
+    systemctl status kubelet
+    systemctl start kubelet
+    systemctl status kubelet
+    
 exit
 ssh controlplane
 k get nodes
