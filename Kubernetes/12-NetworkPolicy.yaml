@@ -229,3 +229,28 @@ spec:
       protocol: TCP
     - port: 53
       protocol: UPD
+
+
+# you have a cluster with pods in many namespaces. "db" pods in "project-a" namespace should only be accesible from "service" pods that are running in "project-b" namespace => create networkPolicy
+k get po -n project-a --show-labels
+k get po -n project-b --show-labels
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-service-to-db
+  namespace: project-a
+spec:
+  podSelector:
+    matchLabels:
+      app: db  # db pods have a label "app=db"
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: project-b  # Allow access from project-b namespace
+    - podSelector:
+         matchLabels:
+           app: service  # Allow access from pods with label app=service in project-b namespace
