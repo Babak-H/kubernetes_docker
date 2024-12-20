@@ -165,9 +165,10 @@ k set serviceaccount deploy/web-dashboard dashboard-sa
 #################################################################################### Cluster Troubleshooting
 
 # kubelet configuration file is usaully located at one of these locations:
-# 1. /var/lib/kubelet/config.yaml
+# 1. /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
 # 2. /etc/systemd/system/kubelet.service or /usr/lib/systemd/system/kubelet.service
 # 3. /etc/default/kubelet or etc/sysconfig/kubelet
+# 4. /var/lib/kubelet/config.yaml => this is the kubeconfig for kubele
 
 # a kubeconfig file called "admin.kubeconfig" has been created in /root/CKA . there is something wrong with the configuration. troubleshoot and fix it
 # make sure the port for kube-apiserver is correct. correct port number is "6443"
@@ -337,6 +338,21 @@ spec:
 
 # access the kubernetes resources via an specific KubeConfig
 k get nodes --kubeconfig=/root/CKA/super.kubeconfig  # if there is an error, you will see it here
+
+# if there is a problem with kube-apiserver
+k get po -n kube-system   # The connection to the server 172.30.1.2:6443 was refused - did you specify the right host or port? , you won't get kubectl access
+journalctl -u kubelet -n 20  # you should see errors related to pods
+# you can check logs for all the pods here
+ls /var/log/pods
+# for example
+cat /var/log/pods/kube-system_kube-apiserver-controlplane_36b3bac598f6bd76f4b97286d2bcb99b/kube-apiserver/5.log
+# you can check logs for all the containers here
+ls /var/log/containers
+# for example
+cat /var/log/containers/kube-apiserver-controlplane_kube-system_kube-apiserver-0fe767a310f5188065e2be5d5c25f9feef4a52938a5137f6427e371e5da7849c.log
+# fix it here
+/etc/kubernetes/manifests/kube-apiserver.yaml
+systemctl daemon-reload
 
 #################################################################################### custom json values
 # Check to see how many nodes are ready (not including nodes tainted NoSchedule) and write the number to /opt/KUSC00402/kusc00402.txt.
