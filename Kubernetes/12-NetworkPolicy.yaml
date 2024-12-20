@@ -173,3 +173,59 @@ spec:
 
 # k run busybox --image=busybox -- wget http://nginx:80  # this will be stuck at downloading the html file
 # k run busybox1 --image=busybox -l access=granted -- wget http://nginx:80  # this will work
+
+
+# All Pods in Namespace `default` with label `level=100x` should be able to communicate with Pods with label `level=100x` in Namespaces level-1000 , level-1001 and level-1002  => we should have egress rule on pods in default namespace, to allow traffic to go out
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: np-100x
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      level: 100x
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: level-1000
+      # this means pods should be in level-1000 ns AND labeled level:100x
+      podSelector:
+        matchLabels:
+          level: 100x
+    # this port rule ONLY applies to pods in this specific rule
+    ports:
+    - port: 80
+      protocol: TCP
+      
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: level-1001
+      podSelector:
+        matchLabels:
+          level: 100x
+    ports:
+    - port: 80
+      protocol: TCP
+      
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: level-1002
+      podSelector:
+        matchLabels:
+          level: 100x
+    ports:
+    - port: 80
+      protocol: TCP
+      
+  # these port are seperate section than each "- to" section, meaning all port 53 traffic to EVERYWHERE is allowed
+  - ports:
+    - port: 53
+      protocol: TCP
+    - port: 53
+      protocol: UPD
