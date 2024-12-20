@@ -38,6 +38,7 @@ spec:
             
 # Create a DaemonSet named configurator , it should: be in Namespace configurator , use image bash , mount /configurator as HostPath volume on the Node it's running on, write "aba997ac-1c89-4d64" into file /configurator/config on its Node 
 # via the "command:" section, be kept running using "sleep 1d" or similar after the file write command
+---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
