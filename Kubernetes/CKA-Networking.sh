@@ -195,3 +195,11 @@ crictl ps
 docker ps
 # get logs for a specific container
 crictl logs CONTAINER-ID
+
+# you are instructing the systemd system and service manager to reload its configuration files. This command is necessary when you have made changes to unit files (such as service files) or have added new ones, and 
+# you want systemd to recognize these changes without having to reboot the system.
+systemctl daemon-reload
+# NO SERVICE RESTART: It's important to note that daemon-reload does not restart any running services. It only reloads the configuration. If you need to apply changes to a running service, you will need to restart or reload the 
+# service separately using systemctl restart <service-name> or systemctl reload <service-name>, i.e:
+systemctl daemon-reload
+systemctl restart kubelet
