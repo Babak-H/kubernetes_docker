@@ -249,5 +249,59 @@ spec:
       effect: "NoSchedule"
 
 # taint and toleration => good for preventing pods on a node
-# pod affinity => good for adding pod to specific node
-# use them in combination with each other
+
+
+# Deploy this pod Where there is another pod on the Node that has label "level=restricted" (Preferred)
+# There is a _Pod_ YAML provided at `/root/hobby.yaml`. That Pod should be preferred to be only scheduled on Nodes where Pods with label `level=restricted` are running. For the `topologyKey` use `kubernetes.io/hostname` .
+# There are no taints on any Nodes which means no tolerations are needed.
+k get po -A -o wide -l level=restricted
+  # NAMESPACE   NAME         READY   STATUS    RESTARTS   AGE   IP            NODE     NOMINATED NODE   READINESS GATES
+  # default     restricted   1/1     Running   0          20m   192.168.1.4   node01   <none>           <none>
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    level: hobby
+  name: hobby-project
+spec:
+  containers:
+  - image: nginx:alpine
+    name: c
+  affinity:
+    podAffinity:
+      prefferedDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpression:
+            - key: level
+              operator: In
+              values:
+              - restricted
+          topologyKey: kubernetes.io/hostname
+
+# Deploy this pod Where there is No pod on the Node that has the label "level=restricted" (Required)      
+# opposite of above: That Pod should be required to be only scheduled on Nodes where no Pods with label `level=restricted` are running.
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    level: hobby
+  name: hobby-project
+spec:
+  containers:
+  - image: nginx:alpine
+    name: c
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+        matchExpression:
+        - key: level
+          operator: In
+          values:
+          - restricted
+        topologyKey: kubernetes.io/hostname
+        
