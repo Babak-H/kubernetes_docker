@@ -4,27 +4,27 @@
 # You are also expected to upgrade kubelet and kubectl on the master node, do NOT upgrade the worker nodes, etcd, the containerv manager, the CNI plugins or the DNS service
 # You are also expected to upgrade kubelet and kubectl on the master node.
 
-k config use-context mk8s
 k cordon mk8s-master-0
 k drain mk8s-master-0 --ignore-daemonsets
 k get nodes  # make sure its drained and unschedulable
 ssh mk8s-master-0
-sudo -i
+sudo -s
 # start the upgrade process
+apt update
+apt-cache madison kubeadm | grep "1.30" # display detailed information about a specific package available in the APT package repository on Debian-based systems, showing it's different versions | find correct version
 apt-mark unhold kubeadm  # when you are ready to upgrade kubeadm to newer versions manually, you can unlock the old, basically un-freezing package version
-apt-get update 
-apt-cache show kubeadm | grep 1.30  # display detailed information about a specific package available in the APT package repository on Debian-based systems, showing it's different versions | find correct version
 apt-get install -y kubeadm='1.32.x-*' # -y flag => automatically answer "yes" to any prompts that might appear during the installation process, allowing running the command from a script
-sudo apt-mark hold kubeadm # o prevent the specified packages (kubeadm here) from being automatically upgraded when you run system updates, freezes package version
-kubeadm version
+kubeadm version -o short
+apt-mark hold kubeadm # o prevent the specified packages (kubeadm here) from being automatically upgraded when you run system updates, freezes package version
 kubeadm upgrade plan
 kubeadm upgrade apply v1.32.x --etcd-upgrade=false --skip-phases=addon/coredns
 # upgrade kubectl and kubelet on master node
 apt-mark unhold kubelet kubectl 
-apt-get update && sudo apt-get install -y kubelet='1.32.x-*' kubectl='1.32.x-*'
-apt-mark hold kubelet kubectl
-k version 
+apt-get update
+apt-get install -y kubelet='1.32.x-*' kubectl='1.32.x-*'
+kubectl version 
 kubelet --version
+apt-mark hold kubelet kubectl
 systemctl daemon-reload
 systemctl restart kubelet
 exit
@@ -33,28 +33,29 @@ k get nodes
 
 # worker-node3 is running an earlier version of the Kubernetes software. Perform an upgrade on worker-node3 and ensure that it is running the exact same version as used on 
 # the control-plane and other worker nodes (those nodes are already upgraded)
-k get nodes -o wide
+# upgrading worker node is EXACTLY same as the controlplane, except the "kubeadm upgrade plan" and "kubeadm upgrade apply" we use "kubeadm upgrade node"
 ssh controlplane 
 kubeadm --version 
 k cordon worker-node-3
 k drain worker-node-3 --ignore-daemonsets
 k get nodes
 ssh worker-node-3
-sudo -i
+sudo -s
 # start the upgrade process
+apt update
+apt-cache madison kubeadm | grep "1.30"
 apt-mark unhold kubeadm
-apt-cache show kubeadm | grep 1.30
-apt-get install -y kubeadm=1.30.1-1.1
-apt-mark hold kubeadm
+apt-get install -y kubeadm="1.30.1-1.1"
 kubeadm version -o short
-kubeadm upgrade node     # kubeadm upgrade apply v1.32.x => difference with master node, Also calling kubeadm upgrade plan and upgrading the CNI provider plugin is no longer needed
-# upgrade kubelet and kubectl on worker node
+apt-mark hold kubeadm
+kubeadm upgrade node  # only change is here
+apt-mark unhold kubelet kubectl 
+# you CAN NOT check the node version here, do it at end on controlplane node
 apt-get update
-apt-mark unhold kubectl kubelet
-apt-get install -y kubectl=1.30.1-1.1 kubelet=1.30.1-1.1
-apt-mark hold kubectl kubelet
+apt-get install -y kubectl="1.30.1-1.1" kubelet="1.30.1-1.1"
 k version 
 kubelet --version
+apt-mark hold kubectl kubelet
 systemctl daemon-reload
 systemctl restart kubelet
 exit
@@ -67,19 +68,17 @@ k get nodes
 k get nodes
 ssh controlplane # in case we are not on master node
 kubeadm token create --print-join-command  # save the output command and use it on node01
-
 ssh node01
-sudo -i
+sudo -s
 kubeadm join 172.30.1.2:6443 --token sfbhsu.llclabbyggkogg9q --discovery-token-ca-cert-hash sha256:4382fe27b4d9a6e4115fb22fb315f4687e355909e76e66ee46a6bde485877464
-
 # if there is any error here check the kubelet
-    systemctl status kubelet
-    systemctl start kubelet
-    systemctl status kubelet
-    
+  systemctl status kubelet
+  systemctl start kubelet
+  systemctl status kubelet  
 exit
 ssh controlplane
 k get nodes
+# just for testing
 k run web --image=nginx
 k get po
 
@@ -92,20 +91,26 @@ k get po -n kube-system # make sure there is a pod related to etcd here, it mean
 sudo -i  # backup can only be performed when you are root user
 cat /etc/kubernetes/manifests/etcd.yaml  # find the folder with etcd certificates
 ls -la /etc/kubernetes/pki/etcd
+
 # --endpoints 127.0.0.1:2379  => since we are on same node this is NOT required here
 ETCDCTL_API=3 etcdctl --endpoints 127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /var/lib/backup/etcd-snapshot.db
+ls /var/lib/backup/etcd-snapshot.db  # file should be visible
 
 # restore an existing, previous snapshot located at /var/lib/backup/etcd-snapshot-previous.db
-ls /var/lib
-mkdir -p /var/lib/new-etcd
+
 # make sure that etcd user owns it otherwise you need to become a root user and change owner permission then you need to restore db backup
 ls -la /var/lib/backup/etcd-snapshot-previous.db
-ETCDCTL_API=3 etcdctl snapshot restore --data-dir=/var/lib/new-etcd/ /var/lib/backup/etcd-snapshot-previous.db
+ETCDCTL_API=3 etcdctl snapshot restore /var/lib/backup/etcd-snapshot-previous.db --data-dir=/var/lib/new-etcd/ 
+ls /var/lib/new-etcd/
+# we need to change the hostPath for the etcd-data volume to the restored database address:
 vi /etc/kubernetes/manifests/etcd.yaml
-    # - hostPath:
-    #    path: /var/lib/new-etcd/
-    #    type: DirectoryOrCreate
-    #   name: etcd-data
+    volumes:
+    - hostPath:
+          path: /var/lib/new-etcd/
+          type: DirectoryOrCreate
+      name: etcd-data
+# takes around 3 minutes to re-start the etcd pod, during this time the kubectl can't be accessed!
+k get po -n kube-system
     
 # take the backup of the ETCD at the location "/opt/etcd-backup.db" on the "controlplane" node
 export ETCDCTL_API=3
@@ -164,6 +169,14 @@ k auth can-i get pods --as=john -n development
 
 # associate a serviceAccount with a deployment
 k set serviceaccount deploy/web-dashboard dashboard-sa
+
+# Using kubeadm, read out the expiration date of the apiserver certificate and write it into /root/apiserver-expiration
+kubeadm certs check-expiration | grep apiserver
+echo "Dec 06, 2025 09:13 UTC" > /root/apiserver-expiration
+
+#  Using kubeadm, renew the certificates of the apiserver and scheduler.conf
+kubeadm certs renew apiserver
+kubeadm certs renew scheduler.conf
 
 #################################################################################### Cluster Troubleshooting
 
