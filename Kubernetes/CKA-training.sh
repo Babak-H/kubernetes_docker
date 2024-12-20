@@ -354,6 +354,11 @@ cat /var/log/containers/kube-apiserver-controlplane_kube-system_kube-apiserver-0
 /etc/kubernetes/manifests/kube-apiserver.yaml
 systemctl daemon-reload
 
+# accessing all containers when kube-apiserver is down 
+crictl ps
+# accessing all container logs when kube-apiserver is down 
+crictl logs <CONTAIMER-ID>
+
 #################################################################################### custom json values
 # Check to see how many nodes are ready (not including nodes tainted NoSchedule) and write the number to /opt/KUSC00402/kusc00402.txt.
 echo $(k get nodes --no-headers | grep -v 'NoSchedule' | grep -c 'Ready' | wc -l ) > opt/KUSC00402/kusc00402.txt
