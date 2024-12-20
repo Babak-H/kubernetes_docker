@@ -183,10 +183,15 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 
 
-
-
-
-
+# User `smoke` should have `view` permissions (like the permissions of the default ClusterRole named `view` ) in all Namespaces but not in kube-system => you are allowed to bind a clusterRole to a namespace via RoleBinding process
+k get ns
+  # NAME                 STATUS   AGE
+  # applications         Active   12m
+  # default              Active   13d
+  # kube-node-lease      Active   13d
+k -n applications create rolebinding test-view --clusterrole=view --user=smoke
+k -n default create rolebinding smoke-view --clusterrole=view --user=smoke
+k -n kube-node-lease create rolebinding smoke-view --clusterrole=view --user=smoke
 
 
 
