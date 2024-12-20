@@ -50,7 +50,7 @@ tcpdump -l
 iptables -t nat -A POSTROUTING -s 192.168.5.0/24 -j MASQURADE
 
 # Displays a list of all running processes with detailed information, such as CPU and memory usage.
-ps aux
+ps -aux
 
 # Creates a new network namespace named 'red', allowing for isolated network configurations.
 ip netns add red
@@ -188,3 +188,10 @@ openssl x509 -req -in apiserver.csr -CA ca.crt -CAkey ca.key -out apiserver.crt
 # difference between "sudo -i" and "sudo -s"
 sudo -i  # The -i option stands for "login shell." When you use sudo -i, it simulates a full login as the target user (by default, the root user). simulate a full login session for the target user, losing you current folder and setting
 sudo -s  # The -s option stands for "shell." When you use sudo -s, it opens a shell with elevated privileges but retains the current user's environment and maintain your current environment settings and working directory.
+
+# get all the running containers on this node
+crictl ps
+# same as above, but if docker is installed
+docker ps
+# get logs for a specific container
+crictl logs CONTAINER-ID
