@@ -5,10 +5,14 @@
 # kube-proxy => creates services to connect pods together
 
 # kube-apiserver => 6443
-# kubelet => 10250
+# kubelet => 10250  /var/lib/kubelet/
 # kube-scheduler => 10251
 # kube-controller-manager => 10252
 # etcd => 2379-2380
+
+# kubeadm => /etc/kubernetes/admin.conf
+# CNI => /etc/cni/inet.d/
+# static pods => /etc/kubernetes/manifests/
 
 # drain vs cordon
 # Cordon => used to mark a node as unschedulable. This means that no new pods will be scheduled on the node, but existing pods will continue to run.
@@ -226,6 +230,18 @@ kubectl delete pods kube-controller-manager-* kube-scheduler-* -n kube-system
 systemctl restart kubelet
 # pods should be working properly
 kubectl get deploy -n web-apps
+
+# *** how can restoring an older version of etcd cluster restore deployments and daemonsets automatically?
+# Restoring an older version of an etcd cluster can automatically restore Kubernetes resources like Deployments and DaemonSets because etcd is the primary data store for Kubernetes. Here's how it works:
+# 1. **etcd as the Data Store**: In a Kubernetes cluster, etcd is used to store the entire state of the cluster. This includes all the configuration data, the state of all the resources (like Pods, Deployments, Services, etc.), and the cluster metadata.
+# 2. **Snapshot and Restore**: When you take a snapshot of your etcd cluster, you are capturing the entire state of the Kubernetes cluster at that point in time. This snapshot includes all the information about Deployments, DaemonSets, and other resources.
+# 3. **Restoring etcd**: When you restore an etcd snapshot, you are effectively reverting the cluster's state to what it was at the time the snapshot was taken. This means that all the resources that existed at that time, including Deployments and DaemonSets, 
+# are restored to their previous state.
+# 4. **Automatic Reconciliation**: Kubernetes has a reconciliation loop that continuously works to ensure that the actual state of the cluster matches the desired state as defined in etcd. When you restore etcd, the desired state is updated to reflect 
+# the snapshot, and Kubernetes will automatically work to bring the actual state of the cluster in line with this restored desired state. This means that any Deployments or DaemonSets that were present in the snapshot will be recreated and managed 
+# according to their specifications.
+# In summary, restoring an etcd snapshot effectively rolls back the entire cluster to a previous state, including all the resources and configurations that were present at that time. Kubernetes then automatically reconciles the cluster to match this 
+# restored state, which includes recreating Deployments and DaemonSets as needed.
 
 # Certificates
 
