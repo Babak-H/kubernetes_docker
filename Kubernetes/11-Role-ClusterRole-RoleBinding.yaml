@@ -193,6 +193,12 @@ k -n applications create rolebinding test-view --clusterrole=view --user=smoke
 k -n default create rolebinding smoke-view --clusterrole=view --user=smoke
 k -n kube-node-lease create rolebinding smoke-view --clusterrole=view --user=smoke
 
+# create a new serviceAccount "gitops" in namespace "project-1" create role and rolebinding both named "gitops-role" and "gitops-rolebinding". allows the SA 
+# to create secrets and configmaps in the namespace
+k create serviceaccount gitops -n project-1
+k create role gitops-role -n project-1 --verb=create --resources=secret,configmaps
+k create rolebinding gitops-rolebinding -n project-1 --role=gitops-role --serviceaccount=gitops
+k auth can-i create secret -n project-1 --as system:serviceaccount:project-1:gitops
 
 
 
