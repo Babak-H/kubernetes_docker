@@ -436,13 +436,6 @@ k get cr
 k create clusterrolebinding pvviewer-role-binding --cluster-role=pvviewer-role --serviceaccount=pvviewer
 k auth can-i list persistentvolumes --as system:serviceaccount:default:pvviewer  # yes
 
-# create a new serviceAccount "gitops" in namespace "project-1" create role and rolebinding both named "gitops-role" and "gitops-rolebinding". allows the SA 
-# to create secrets and configmaps in the namespace
-k create serviceaccount gitops -n project-1
-k create role gitops-role -n project-1 --verb=create --resources=secrets,configmpas
-k create rolebinding gitops-rolebinding -n project-1 --role=gitops-role --serviceaccount=gitops
-k auth can-i create secret -n project-1 --as system:serviceaccount:project-1:gitops
-
 #################################################################################### NetworkPolicy
 # Create a new NetworkPolicy named allow-port-from-namespace in the existing namespace echo. Ensure that the new NetworkPolicy allows Pods in namespace internal to connect to port 9200/tcp of Pods in namespace echo. 
 # ensure that: does not allow access to Pods, which don't listen on port 9200/tcp => applied via adding the port
@@ -480,31 +473,7 @@ spec:
   podSelector: {}
   policyTypes:
   - Ingress  # if we do not mention any specific ingress policy , all is denied!
-
-# you have a cluster with pods in many namespaces. "db" pods in "project-a" namespace should only be acceesible from "service" pods that are running in "project-b" namespace => create networkPolicy
-k get po -n project-a --show-labels
-k get po -n project-b --show-labels
-
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-service-to-db
-  namespace: project-a
-spec:
-  podSelector:
-    matchLabels:
-      app: db  # Assuming your db pods have a label "app=db"
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          name: project-b  # Allow access from project-b namespace
-    - podSelector:
-         matchLabels:
-           app: service  # Allow access from pods with label app=service in project-b namespace
-
+  
 #################################################################################### Ingress
 # create a new "nginx resource": name:pong, namespace:ing-internal, expose service hello on path /hello using service port 5678 => Ingress
 
@@ -537,32 +506,7 @@ k create ingress pong -n ing-internal --rule="/hello=hello:5678"
 k get svc -A # get the ip address
 curl -KL Internal-IP/hello
 
-k create ingress web -n ca1 --rule="/=web-svc:80"
-kubectl describe cm -n ca1 webapp-host-fqdn
-k edit ingress web -n ca1
-
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: web
-  namespace: ca1
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-spec:
-  ingressClassName: nginx
-  rules:
-    - host: web.35.83.124.103.nip.io
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: web-svc
-                port:
-                  number: 80
-
-k create ingress ingress-pay -n critical-space --rule="wear*=wear-service:80" --dry-run=client -o yaml > ing.yaml
+k create ingress ingress-pay -n critical-space --rule="/wear*=wear-service:80" --dry-run=client -o yaml > ing.yaml
 
 #################################################################################### DaemonSets
 # Ensure a single instance of pod nginx is running on each node of the Kubernetes cluster where nginx also represents the Image name which has to be used. Do not override any taints 
@@ -629,6 +573,9 @@ spec:
 k get ds -n project1 -o wide
 
 #################################################################################### PV, PVC, StorageClass
+# get pvc events
+k -n earth describe pvc earth-project-earthflower-pvc  # event section is at the end
+
 # Create a persistent volume with name app-data, of capacity 2Gi and access mode ReadOnlyMany. The type of volume is hostPath and its location is /srv/app-data. 
 apiVersion: v1
 kind: PersistentVolume
@@ -756,72 +703,8 @@ spec:
           volumeMounts:
             - mountPath: /tmp/web-data
               name: web-volume
-
-# a new deployment called 'alpha-mysql' has been deployed in the 'alpha' namespace. However, the pods are not running. Troubleshoot and fix the issue. The deployment should make use of the 
-# persistent volume 'alpha-pv' to be mounted at /'var/lib/mysql' and should use the environment variable 'MYSQL_ALLOW_EMPTY_PASSWORD=1' to make use of an empty root password. Do NOT alter the persistent volume.
-k describe alpha-mysql -n alpha  # its correct
-k describe pv alpha-pv # its correct
-k get pvc -n alpha # we have no pvc to bound the pv to deployment, create it in the namespace
-
-apiVersion: v1
-kind: PersistentVolumeClaim 
-metadata:
-  name: mysql-alpha-pvc
-  namespace: alpha # same ns as the deployment
-spec:
-  accessModes: # should be same as the one on pv
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi #same or smaller than pv
-  storageClassName: slow # same class as pv
-
-kubectl get deployment -n alpha
-kubectl get pv
-
-# Create a pod called 'secret-1401' in the 'admin1401' namespace using the 'busybox' image. The container within the pod should be called 'secret-admin' and should sleep for 4800 seconds.
-# The container should mount a read-only secret volume called 'secret-volume' at the path '/etc/secret-volume'. The secret being mounted has already been created for you and is called 'dotfile-secret'
-k run secret-1401 -n admin1401 --image=busybox --dry-run=client -o yaml --command -- sleep 4800 > admin.yaml
-
-apiVersion: v1
-kind: Pod
-metadata:
-  name: secret-1401
-  namespace: admin1401
-  labels:
-    run: secret-1401
-spec:
-  volumes:
-  - name: secret-volume
-    secret:
-      secretName: dotfile-secret
-  containers:
-  - name: secret-admin
-    image: busybox
-    command:
-    - sleep
-    - "4800"
-    volumeMounts:
-    - name: secret-volume
-      readOnly: true
-      mountPath: "/etc/secret-volume"
-
-
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: class
-provisioner: kubernetes.io/aws-ebs
-reclaimPolicy: Retain 
-allowVolumeExpansion: false
-volumeBindingMode: WaitForFirstConsumer
-parameters:
-  type: gp2
-
-# get pvc events
-k -n earth describe pvc earth-project-earthflower-pvc  # event section is at the end
-
-#################################################################################### Service
+              
+################################################################################### Service
 # Reconfigure the existing deployment front-end and add a port specification named http exposing port 80/tcp of the existing container nginx.
 # Create a new service named front-end-svc exposing the container port http.
 # Configure the new service to also expose the individual Pods via a NodePort on the nodes on which they are scheduled. => by default pods are exposed on same node if svc type is NodePort
@@ -943,64 +826,6 @@ spec:
     nodeSelector:
       disk: spinning
 
-# create a pod called non-root-pod, image: redis:alpine, runAsUser: 1000, fsGroup: 2000
-k run non-root-pod --image=redis:alpine --dry-run=client -o yaml > po.yaml
-
-apiVersion: v1
-kind: Pod
-metadata:
-  name: non-root-pod
-spec:
-  # applied to all containers in pod
-  securityContext:
-    runAsUser: 1000
-    fsGroup: 2000
-  containers:
-  - name: non-root-pod
-    image: nginx:alpine
-
-# create a new pod called "super-pod" with image "busybox:1.28" and allow the pod to be able to set "SYS_TIME". the container should sleep for 4800 seconds
-k run super-pod --image=busybox:1.28 --dry-run=client -o yaml --command -- sleep 4800 > pod.yaml
-
-apiVersion: v1
-kind: Pod
-metadata:
-  name: super-pod
-  labels:
-    run: super-pod
-spec:
-  securityContext: #  allow the pod to be able to 
-    capabilities:
-      add: ["SYS_TIME"]
-  containers:
-  - name: super-pod
-    image: busybox:1.28
-    command:
-    - sleep
-    - "4800"
-
-# create a pod "web-pod" using image "nginx" with a limit 0.5cpu and 200Mi memory and resource request of 0.1 cpu and 100 mi memory in develop namespace
-k run web-pod -n develop --dry-run=client -o yaml > pod.yaml
-
-apiVersion: v1
-kind: Pod
-metadata:
-  name: web-pod
-  namespace: develop
-spec:
-  containers:
-  - image: nginx
-    name: web-pod
-    resources:
-      requests:
-        cpu: "100m"
-        memory: "100Mi"
-      limits:
-        cpu: "500m"
-        memory: "200Mi"
-
-k get po -n develop
-
 # Create a pod with image nginx called nginx and allow traffic on port 80
 k run nginx --image=nginx --restart=Never --port=80  # restart never is to keep the pod running indefinitely
 
@@ -1017,58 +842,6 @@ k describe po nginx | grep value1
 # crate a pod that echo's hello world and does not restart and have it deleted when it completes
 k run busybox --image busybox -it --rm --restart=Never -- /bin/sh -c 'echo hello world'
 k get po 
-
-# create a pod named nginxpod with image nginx and label env=prod in production namespace
-k get ns
-k run nginxpod --image=nginx --labels=env=prod -n production
-k get po -n production --show-labels
-
-
-apiVersion: v1
-kind: Pod
-metadata:
-  labels:
-    run: nginx
-  name: nginx
-  namespace: qq3
-spec:
-  containers:
-  - image: nginx
-    name: nginx
-    livenessProbe:
-      httpGet:
-        port: 80
-    readinessProbe: 
-      httpGet:
-        port: 80
-
-
-apiVersion: v1
-kind: Pod
-metadata:
-  labels:
-    run: apache
-  name: apache
-spec:
-  containers:
-  - image: httpd
-    name: apache
-    env:
-      - name: CONTENT
-        valueFrom:
-          configMapKeyRef:
-            name: cloudacademy
-            key: content
-      - name: PASSWORD
-        valueFrom:
-          secretKeyRef:
-            name: credentials
-            key: password 
-      - name: USERNAME
-        valueFrom:
-          secretKeyRef:
-            name: credentials
-            key: username
 
 # move static pod from one node to another
 ssh controlplane
