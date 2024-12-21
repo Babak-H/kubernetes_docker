@@ -305,6 +305,11 @@ k run nginx --image=nginx -- echo 'hi'
 # of starting the Nginx server, the container will execute echo 'hi' as the main command. As a result, the container will start, execute the echo 'hi' command, print 
 # "hi" to the standard output, and then exit.
 k run nginx --image=nginx --command -- echo 'hi'
+
+# crate a pod that echo's hello world and does not restart and have it deleted when it completes
+k run busybox --image busybox -it --rm --restart=Never -- /bin/sh -c 'echo hello world'
+k get po
+
 ##### ReplicaSet ##########################################################################
 
 k get replicaset new-replicaset -o wide
