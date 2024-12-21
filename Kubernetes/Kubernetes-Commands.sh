@@ -590,6 +590,8 @@ k delete pvc myclaim
 
 # check pvc events/status
 k describe pvc local-pvc
+# get pvc events
+k -n earth describe pvc earth-project-earthflower-pvc # event section is at the end
 
 kubectl get pvc -n 105250-core-vault | grep prometheus-postgres
 kubectl delete pvc -n 105250-core-vault prometheus-postgres-db-prometheus-postgres-{0..2}
