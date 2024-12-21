@@ -186,6 +186,9 @@ k exec webapp -- cat /log/app.log
 # show all environment variables inside the pod
 k exec -it nginx -- env
 
+# get all the environment variables from a pod
+k exec nginx -- env
+
 k run nginx --image=nginx
 k run nginx --image=nginx -- /bin/sh -c 'echo hello world'
 k run nginx --image=nginx --restart=onFailure --port=80 -n mynamespace --env=HOSTNAME=local --labels=bu=finance,ENV=dev --requests='cpu=100m,memory=256Mi' --limits='cpu=200m,memory=512Mi' --dry-run -o yaml
