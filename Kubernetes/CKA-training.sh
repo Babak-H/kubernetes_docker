@@ -1,3 +1,7 @@
+vi ~/.vimrc
+  set tabstop=2
+  set expandtab
+  set shiftwidth=2
 #################################################################################### Upgrade Cluster => search "cluster upgrade"
 # Given an existing Kubernetes cluster running version 1.22.1, upgrade all of the Kubernetes controlplane and node components on the master node only to version 1.22.2.
 # Be sure to drain the master node before upgrading it and uncordon it after the upgrade
@@ -229,6 +233,13 @@ vi /root/CKA/admin.kubeconfig  # change the kube-apiserver port to 6443
 # access the kubernetes resources via an specific KubeConfig
 k get nodes --kubeconfig=/root/CKA/super.kubeconfig  # if there is an error, you will see it here
 
+# get all contexts
+k config get-contexts 
+k config get-contexts -o name > /opt/course/1/contexts
+# current context
+kubectl config current-context
+cat ~/.kube/config | grep current | sed -e "s/current-context: //"
+
 ############################################## CoreDNS, DNS, CNI
 # Create a nginx pod called nginx-resolver using image nginx, expose it internally with a service called nginx-resolver-service. Test that you are able to look up 
 # the service and pod names from within the cluster. Use the image: busybox: 1.28 for dns lookup. Record results in /root/KA/nginx.svc and /root/CKA/nginx.pod
@@ -271,6 +282,8 @@ cat /etc/cni/net.d/10-calico.conflist
   "ipam": {
       "type": "calico-ipam"
 
+# all CNI plugin configurartions and related things can be found at /etc/cni/net.d/
+
 ############################################## Kube-ApiServer
 # if there is a problem with kube-apiserver we can't access kubectl
 k get po -n kube-system   # The connection to the server 172.30.1.2:6443 was refused - did you specify the right host or port? , you won't get kubectl access
@@ -294,6 +307,44 @@ crictl logs <CONTAIMER-ID>
 
 # Determine the Service CIDR range used by the cluster.
 k get po kube-apiserver-xxx-xxx -n kube-system -o yaml | grpe -i "service-cluster-ip-range"  # - --service-cluster-ip-range=10.96.0.0/12
+
+# How many controlplane nodes are available?, How many worker nodes are available?, What is the Service CIDR?, 
+# Which Networking (or CNI Plugin) is configured and where is its config file?, Which suffix will static pods have that run on cluster1-node1?
+k get nodes -o wide  # see the worker nodes and controlplane nodes
+
+# ssh into master node, then:
+# or just "grep range", service CIDR
+cat /etc/kubernetes/manifests/kube-apiserver.yaml | grep "service-cluster-ip-range"
+
+ls -la /etc/cni/net.d/
+# /etc/cni/net.d/
+# /etc/cni/net.d/10-weave.conflist
+cat /etc/cni/net.d/10-weave.conflist
+# {
+#     "cniVersion": "0.3.0",
+#     "name": "weave",
+
+# Which suffix will static pods have that run on cluster1-node1? => The suffix is the node hostname with a leading hyphen "-cluster1-node1"
+############################################## Scheduler
+# how to stop kube-scheduler => either move the pod to another folder outside manifests OR just comment some parts of it
+# check 
+k get po -n kube-system | grep scheduler
+
+# adding nodeName to .spec of a pod, manually schedules it on a Node, even if kube-scheduler is down
+# The only thing a scheduler does, is that it sets the nodeName for a Pod declaration
+# Only the scheduler takes tains/tolerations/affinity into account when finding the correct node name. That's why it's still possible to assign Pods manually directly to a controlplane node and skip the scheduler
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: manual-schedule
+  name: manual-schedule
+  namespace: default
+spec:
+  # nodeName: NAME-OF-SPECIFIC-NODE
+  nodeName: cluster2-controlplane1        
+  containers:
+  - image: httpd:2.4-alpine
 
 #################################################################################### Static Pods
 # create an static pod named "static-pod" on the "node01" node that uses the "busybox" image and the command "sleep 2000"
@@ -324,6 +375,30 @@ vi /home/ubuntu/static-pods/report.txt   # write the names here
 # move static pod from one node to another
 ssh controlplane
 scp /etc/kubernetes/manifests/my-sp.yaml node01:/etc/kubernetes/manifests/my-sp.yaml
+
+# schedule a pod ONLY on controlplane node => node selector (label) + tiant-toleration (taints)
+k get node
+k describe node cluster1-controlplane1 | grep Taint -A1 # node-role.kubernetes.io/control-plane:NoSchedule
+k get node cluster1-controlplane1 --show-labels # node-role.kubernetes.io/control-plane: ""
+k run pod1 --image=httpd:2.4.41-alpine --dry-run=client -o yaml > 2.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: pod1
+  name: pod1
+spec:
+  containers:
+  - image: httpd:2.4.41-alpine
+    name: pod1-container
+  # toleration allows the pod to run on the controlplane
+  tolerations:                                 
+  - effect: NoSchedule                         
+    key: node-role.kubernetes.io/control-plane 
+  # nodeselector chooses the pod based on the label
+  nodeSelector:                                
+    node-role.kubernetes.io/control-plane: ""  
 
 #################################################################################### custom json values
 # list all persistent volumes sorted by capacity, saving the full kubectl output to /opt/pv/pv_list.txt
@@ -360,6 +435,12 @@ k get po -o=custom-columns=POD_NAME:.metadata.name,POD_STATUS:.status.containerS
 # order: <deployment-name> <container-image> <readt-replica-count> <namespace>
 k -n admin2406 get deploy -o=custom-columns=DEPLOYMENT:.metadata.name,CONTAINER_IMAGE:.spec.template.spec.containers[*].image,READY_REPLICAS:.status.readyReplicas,NAMESPACE:.metadata.namespace \
 --sort-by=.metadata.name > /opt/admin2406_data
+
+# show the pods AND THEIR CONTAINER's resource usage
+kubectl top pod --containers=true
+
+# shows the latest events in the whole cluster, ordered by time (metadata.creationTimestamp).
+kubectl get events -A --sort-by=.metadata.creationTimestamp
                                        
 #################################################################################### Certificates and Users
 # analyze and document all X509 certificates currently being used within the provided cluster using just the kubeadm tool
@@ -421,3 +502,40 @@ echo "Dec 06, 2025 09:13 UTC" > /root/apiserver-expiration
 #  Using kubeadm, renew the certificates of the apiserver and scheduler.conf
 kubeadm certs renew apiserver
 kubeadm certs renew scheduler.conf
+
+#################################################################################### PodAffinity, PodAntiAffinity, Topology
+# There should only ever be one Pod of that Deployment running on one worker node, use "topologyKey: kubernetes.io/hostname" for this
+# here we can use PodAntiAffinity rules to make sure that only one pod with label "id: very-important" runs on a node that has the label key of "kubernetes.io/hostname"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    id: very-important                
+  name: deploy-important
+  namespace: project-tiger
+spec:
+  replicas: 3                        
+  selector:
+    matchLabels:
+      id: very-important
+  template:
+    metadata:
+      labels:
+        id: very-important
+    spec:
+      containers:
+      - image: nginx:1.17.6-alpine
+        name: container1
+      - image: google/pause
+        name: container2
+      affinity:                                             
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: id
+                operator: In
+                values:
+                - very-important
+            # Specify a topologyKey, which is a pre-populated Kubernetes label, you can find this by describing a node
+            topologyKey: kubernetes.io/hostname
