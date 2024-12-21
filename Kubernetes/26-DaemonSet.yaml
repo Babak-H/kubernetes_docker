@@ -68,3 +68,28 @@ spec:
         - name: my-vol
           mountPath: /configurator
           
+# Ensure a single instance of pod nginx is running on each node of the Kubernetes cluster where nginx also represents the Image name which has to be used. 
+# Do not override any taints currently in place. 
+# => Use DaemonSet to complete this task and use ds-kusc00201 as DaemonSet name.
+# Do not override any taints => do not edit Node taints, change pod tolerations to be able to deploy pods on controlplane node
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ds-kusc00201
+  namespace: kube-system # ??
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      containers:
+      - name: nginx
+        image: nginx
