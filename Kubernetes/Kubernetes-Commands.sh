@@ -392,6 +392,9 @@ k expose deploy foo --port 6262 --target-port 8080
 # copy file from pod/deployment to local machine
 k cp default/postgresl-deploy:/home/backup/db ./Desktop/mydb1.dmp
 
+# deployment does NOT have --command flag, use -- instead
+k create deploy reddit-1 --image=reddit:alpine -n web --replicas=2 --dry-run=client -o yaml -- sleep '4h' > deploy.yaml
+
 ##### Service ##########################################################################
 
 k get service
@@ -913,39 +916,3 @@ helmfile list
 
 # delete all the service
 helmfile destroy
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
