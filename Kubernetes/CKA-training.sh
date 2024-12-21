@@ -1,8 +1,7 @@
-#################################################################################### Upgrade Cluster
-# Given an existing Kubernetes cluster running version 1.22.1, upgrade all of the Kubernetes control plane and node components on the master node only to version 1.22.2.
+#################################################################################### Upgrade Cluster => search "cluster upgrade"
+# Given an existing Kubernetes cluster running version 1.22.1, upgrade all of the Kubernetes controlplane and node components on the master node only to version 1.22.2.
 # Be sure to drain the master node before upgrading it and uncordon it after the upgrade
 # You are also expected to upgrade kubelet and kubectl on the master node, do NOT upgrade the worker nodes, etcd, the containerv manager, the CNI plugins or the DNS service
-# You are also expected to upgrade kubelet and kubectl on the master node.
 
 k cordon mk8s-master-0
 k drain mk8s-master-0 --ignore-daemonsets
@@ -13,15 +12,15 @@ sudo -s
 apt update
 apt-cache madison kubeadm | grep "1.30" # display detailed information about a specific package available in the APT package repository on Debian-based systems, showing it's different versions | find correct version
 apt-mark unhold kubeadm  # when you are ready to upgrade kubeadm to newer versions manually, you can unlock the old, basically un-freezing package version
-apt-get install -y kubeadm='1.32.x-*' # -y flag => automatically answer "yes" to any prompts that might appear during the installation process, allowing running the command from a script
+apt-get install -y kubeadm=1.32.x-* # -y flag => automatically answer "yes" to any prompts that might appear during the installation process, allowing running the command from a script
 kubeadm version -o short
 apt-mark hold kubeadm # o prevent the specified packages (kubeadm here) from being automatically upgraded when you run system updates, freezes package version
 kubeadm upgrade plan
-kubeadm upgrade apply v1.32.x --etcd-upgrade=false --skip-phases=addon/coredns
+kubeadm upgrade apply v1.32.* --etcd-upgrade=false --skip-phases=addon/coredns
 # upgrade kubectl and kubelet on master node
 apt-mark unhold kubelet kubectl 
 apt-get update
-apt-get install -y kubelet='1.32.x-*' kubectl='1.32.x-*'
+apt-get install -y kubelet=1.32.x-* kubectl=1.32.x-*
 kubectl version 
 kubelet --version
 apt-mark hold kubelet kubectl
@@ -43,17 +42,17 @@ ssh worker-node-3
 sudo -s
 # start the upgrade process
 apt update
-apt-cache madison kubeadm | grep "1.30"
+apt-cache madison kubeadm | grep "1.30"  # this step is NOT required if you are upgrading both master and worker nodes, just use same version as masternode
 apt-mark unhold kubeadm
-apt-get install -y kubeadm="1.30.1-1.1"
+apt-get install -y kubeadm=1.30.1-1.1
 kubeadm version -o short
 apt-mark hold kubeadm
 kubeadm upgrade node  # only change is here
 apt-mark unhold kubelet kubectl 
 # you CAN NOT check the node version here, do it at end on controlplane node
 apt-get update
-apt-get install -y kubectl="1.30.1-1.1" kubelet="1.30.1-1.1"
-k version 
+apt-get install -y kubectl=1.30.1-1.1 kubelet=1.30.1-1.1
+kubectl version 
 kubelet --version
 apt-mark hold kubectl kubelet
 systemctl daemon-reload
@@ -62,7 +61,7 @@ exit
 k uncordon worker-node-3
 k get nodes
 
-#################################################################################### Join Node to cluster
+#################################################################################### Join Node to cluster => search "token join" or "kubeadm token"
 # join node01 worker node to cluster and you have to deploy pod on the node01, pod name should be web and image should be nginx
 
 k get nodes
@@ -75,6 +74,7 @@ kubeadm join 172.30.1.2:6443 --token sfbhsu.llclabbyggkogg9q --discovery-token-c
   systemctl status kubelet
   systemctl start kubelet
   systemctl status kubelet  
+# RE-RUN the KUBEADM JOIN AGAIN, IF KUBELET WAS NOT ACTIVE ??
 exit
 ssh controlplane
 k get nodes
@@ -82,26 +82,26 @@ k get nodes
 k run web --image=nginx
 k get po
 
-#################################################################################### ETCD Backup Restore
+#################################################################################### ETCD Backup Restore => search "etcd backup"
 # create a snapshot of the existing etcd instance running at https://127.0.0.1:2379, saving the snapshot to /var/lib/backup/etcd-snapshot.db
 # ca certificate => /opt/kuin/ca.crt   client-certificate => /opt/kuin/etcd-client.crt  client-key => /opt/kuin/etcd-client.key
 
 ssh controlplane
 k get po -n kube-system # make sure there is a pod related to etcd here, it means that it is on this node
-sudo -i  # backup can only be performed when you are root user
+sudo -s  # backup can only be performed when you are root user
 cat /etc/kubernetes/manifests/etcd.yaml  # find the folder with etcd certificates
 ls -la /etc/kubernetes/pki/etcd
-
 # --endpoints 127.0.0.1:2379  => since we are on same node this is NOT required here
 ETCDCTL_API=3 etcdctl --endpoints 127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /var/lib/backup/etcd-snapshot.db
 ls /var/lib/backup/etcd-snapshot.db  # file should be visible
+# verify the snapshot
+ETCDCTL_API=3 etcdctl --write-out=table snapshot status /var/lib/backup/etcd-snapshot.db
 
-# restore an existing, previous snapshot located at /var/lib/backup/etcd-snapshot-previous.db
-
+# restore an existing, previous snapshot located at /var/lib/backup/etcd-snapshot-previous.db => does NOT tell you where to backup!
 # make sure that etcd user owns it otherwise you need to become a root user and change owner permission then you need to restore db backup
 ls -la /var/lib/backup/etcd-snapshot-previous.db
 ETCDCTL_API=3 etcdctl snapshot restore /var/lib/backup/etcd-snapshot-previous.db --data-dir=/var/lib/new-etcd/ 
-ls /var/lib/new-etcd/
+ls /var/lib/new-etcd/ # make sure it exists
 # we need to change the hostPath for the etcd-data volume to the restored database address:
 vi /etc/kubernetes/manifests/etcd.yaml
     volumes:
@@ -114,77 +114,49 @@ k get po -n kube-system
     
 # take the backup of the ETCD at the location "/opt/etcd-backup.db" on the "controlplane" node
 export ETCDCTL_API=3
-etcdctl snapshot save --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --endpoint=127.0.0.1:2379 /opt/etcd-backup.db
-
-#################################################################################### Certificates and Users
-# analyze and document all X509 certificates currently being used within the provided cluster using just the kubeadm tool
-# update and renew the expiry date within the TLS certificate used by the Kubernetes API server
-ssh controlplane
-sudo -i
-kubeadm certs check-expiration
-# CERTIFICATE                EXPIRES                  RESIDUAL TIME   CERTIFICATE AUTHORITY   EXTERNALLY MANAGED
-# admin.conf                 Jun 26, 2025 14:36 UTC   191d            ca                      no      
-# apiserver                  Jun 26, 2025 14:36 UTC   191d            ca                      no      
-# apiserver-etcd-client      Jun 26, 2025 14:36 UTC   191d            etcd-ca                 no      
-# apiserver-kubelet-client   Jun 26, 2025 14:36 UTC   191d            ca                      no  
-
-# Now renew the API server certificate:
-kubeadm certs renew apiserver
-    # Certificate:
-    #     Data:
-    #         Validity
-    #             Not Before: Jun 26 14:31:52 2024 GMT
-    #             Not After : Dec 16 18:06:55 2025 GMT
-    #         Subject: CN = kube-apiserver
-
-
-# make sure the renew process has applied correctly
-echo | openssl s_client -connect 10.0.0.100:6443 2>/dev/null | openssl x509 -text
-
-
-# Create a new user called john. Grant him access to the cluster. John should have permission to create, list, get, update and delete pods in the development namespace. 
-# The private key exists in the location: /root/CKA/john.key and csr at /root/CKA/john.csr.
-# https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/#create-certificatessigningrequest
-
-cat /root/CKA/john.csr | base64 | tr -d "\n"  # copy the encrypted value value
-# create the certificate signing request file and apply it
-    apiVersion: certificates.k8s.io/v1
-    kind: CertificateSigningRequest
-    metadata:
-        name: john
-    spec:
-        request: ...
-        signerName: https://kubernetes.io/kube-apiserver-client
-        usage: 
-        - client auth 
-        
-k create -f csr.yaml
-k get csr # john should be pending
-k certificate approve john
-k get csr # john should be approved
-
-k create role developer -verb=create,list,get,update,delete —resource=pods -n development
-k create rolebinding dev-john-role --role=developer --user=john -n development  # bound Role developer to user john
-k auth can-i get pods --as=john -n development
-
-# associate a serviceAccount with a deployment
-k set serviceaccount deploy/web-dashboard dashboard-sa
-
-# Using kubeadm, read out the expiration date of the apiserver certificate and write it into /root/apiserver-expiration
-kubeadm certs check-expiration | grep apiserver
-echo "Dec 06, 2025 09:13 UTC" > /root/apiserver-expiration
-
-#  Using kubeadm, renew the certificates of the apiserver and scheduler.conf
-kubeadm certs renew apiserver
-kubeadm certs renew scheduler.conf
+etcdctl snapshot save /opt/etcd-backup.db --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --endpoint=127.0.0.1:2379 
 
 #################################################################################### Cluster Troubleshooting
 
+############################################## Nodes
+# mark the worker node named kworker and unschedulable and reschedule all the pods running on it => schedule to another node
+k get pods -o wide # check if any pod is scheduled on kworker node
+k get nodes
+k cordon kworker # always do cordon before drain, to prevent future pods to be scheduled here!
+k drain kworker --ignore-daemonsets  # error is because one of the pods on this node is using local volumes (emptyDir type), need to add extra flag for it
+k drain kworker --ignore-daemonsets --delete-emptydir-data
+kubectl get pods -o wide
+
+############################################## Kubelet
 # kubelet configuration file is usaully located at one of these locations:
 # 1. /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
 # 2. /etc/systemd/system/kubelet.service or /usr/lib/systemd/system/kubelet.service
 # 3. /etc/default/kubelet or etc/sysconfig/kubelet
 # 4. /var/lib/kubelet/config.yaml => this is the kubeconfig for kubele
+# easiest way to find it:
+systemctl status kubelet # find the section called "Drop-In", the kubelet file to edit is in that folder
+
+# deploy a pod on node01 as per specifiction: name: web-pod | container-name: web | image: nginx   (there will be problems here related to cluster)
+k run web-pod --image=nginx --dry-run=client -o yaml > pod.yaml
+vi pod.yaml # change the container name
+k apply -f pod.yaml
+k get pods # we can see pods is in pending state
+k get nodes # node01 is NOT ready
+ssh node01
+sudo -s
+systemctl status kubelet
+systemctl start kubelet  # ExecStart=/usr/bin/local/kubelet   => normally kubelet exec file should NOT be in local folder, instead at "/usr/bin/kubelet"
+journalctl -u kubelet -n 20 # check the logs
+ls /usr/bin/local/kubelet   # does not exist
+vi /etc/systemd/system/kubelet.service.d/  # go to folder where kubelet executable is located at
+# edit this line
+  ExecStart=/usr/bin/kubelet
+systemctl daemon-reload
+systemctl start kubelet
+exit
+k get po web-pod
+
+
 
 # a kubeconfig file called "admin.kubeconfig" has been created in /root/CKA . there is something wrong with the configuration. troubleshoot and fix it
 # make sure the port for kube-apiserver is correct. correct port number is "6443"
@@ -207,21 +179,7 @@ systemctl status kubelet
 exit
 kubectl get nodes 
 
-# deploy a pod on node01 as per specifiction: name: web-pod | container-name: web | image: nginx   (there will be problems here related to cluster)
-k run web-pod --image=nginx --dry-run=client -o yaml > pod.yaml
-vi pod.yaml # change the container name
-k apply -f pod.yaml
-k get pods # we can see pods is in pending state
-k get nodes # node01 is NOT ready
-ssh node01
-systemctl status kubelet
-systemctl start kubelet  # ExecStart=/usr/bin/local/kubelet   => normally kubelet exec file should NOT be in local folder
-ls /usr/bin/local/kubelet   # does not exist
-vi /etc/systemd/system/kubelet.service.d/  # go to folder where kubelet executable is located at
-# edit this line
-ExecStart=/usr/bin/kubelet
-systemctl daemon-reload
-systemctl start kubelet
+
 
 # Set the node named ek8s-node-0 as unavailable and reschedule all the pods running on it.
 k get nodes
@@ -233,12 +191,7 @@ k drain ek8s-node-1 --ignore-daemonsets --delete-emptydir-data
 kubectl drain ek8s-node-1 --ignore-daemonsets --force
 kubectl get nodes
 
-# mark the worker node named kworker and unschedulable and reschedule all the pods running on it
-k get pods -o wide # check if any pod is scheduled on kworker node
-k get nodes
-k drain kworker --ignore-daemonsets  # error due to using local volume
-k drain kworker --ignore-daemonsets --delete-emptydir-data
-kubectl get pods -o wide
+
 
 # coreDNS version
 k describe po coredns-xxx-xxx -n kube-system # coreDNS version is visible here
@@ -374,6 +327,68 @@ systemctl daemon-reload
 crictl ps
 # accessing all container logs when kube-apiserver is down 
 crictl logs <CONTAIMER-ID>
+
+#################################################################################### Certificates and Users
+# analyze and document all X509 certificates currently being used within the provided cluster using just the kubeadm tool
+# update and renew the expiry date within the TLS certificate used by the Kubernetes API server
+ssh controlplane
+sudo -i
+kubeadm certs check-expiration
+# CERTIFICATE                EXPIRES                  RESIDUAL TIME   CERTIFICATE AUTHORITY   EXTERNALLY MANAGED
+# admin.conf                 Jun 26, 2025 14:36 UTC   191d            ca                      no      
+# apiserver                  Jun 26, 2025 14:36 UTC   191d            ca                      no      
+# apiserver-etcd-client      Jun 26, 2025 14:36 UTC   191d            etcd-ca                 no      
+# apiserver-kubelet-client   Jun 26, 2025 14:36 UTC   191d            ca                      no  
+
+# Now renew the API server certificate:
+kubeadm certs renew apiserver
+    # Certificate:
+    #     Data:
+    #         Validity
+    #             Not Before: Jun 26 14:31:52 2024 GMT
+    #             Not After : Dec 16 18:06:55 2025 GMT
+    #         Subject: CN = kube-apiserver
+
+
+# make sure the renew process has applied correctly
+echo | openssl s_client -connect 10.0.0.100:6443 2>/dev/null | openssl x509 -text
+
+
+# Create a new user called john. Grant him access to the cluster. John should have permission to create, list, get, update and delete pods in the development namespace. 
+# The private key exists in the location: /root/CKA/john.key and csr at /root/CKA/john.csr.
+# https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/#create-certificatessigningrequest
+
+cat /root/CKA/john.csr | base64 | tr -d "\n"  # copy the encrypted value value
+# create the certificate signing request file and apply it
+    apiVersion: certificates.k8s.io/v1
+    kind: CertificateSigningRequest
+    metadata:
+        name: john
+    spec:
+        request: ...
+        signerName: https://kubernetes.io/kube-apiserver-client
+        usage: 
+        - client auth 
+        
+k create -f csr.yaml
+k get csr # john should be pending
+k certificate approve john
+k get csr # john should be approved
+
+k create role developer -verb=create,list,get,update,delete —resource=pods -n development
+k create rolebinding dev-john-role --role=developer --user=john -n development  # bound Role developer to user john
+k auth can-i get pods --as=john -n development
+
+# associate a serviceAccount with a deployment
+k set serviceaccount deploy/web-dashboard dashboard-sa
+
+# Using kubeadm, read out the expiration date of the apiserver certificate and write it into /root/apiserver-expiration
+kubeadm certs check-expiration | grep apiserver
+echo "Dec 06, 2025 09:13 UTC" > /root/apiserver-expiration
+
+#  Using kubeadm, renew the certificates of the apiserver and scheduler.conf
+kubeadm certs renew apiserver
+kubeadm certs renew scheduler.conf
 
 #################################################################################### custom json values
 # Check to see how many nodes are ready (not including nodes tainted NoSchedule) and write the number to /opt/KUSC00402/kusc00402.txt.
