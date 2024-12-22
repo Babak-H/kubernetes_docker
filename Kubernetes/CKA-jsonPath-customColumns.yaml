@@ -1,0 +1,61 @@
+# list all persistent volumes sorted by capacity, saving the full kubectl output to /opt/pv/pv_list.txt
+k get pv test-pv -o yaml 
+k get pv --sort-by=.spec.capacity.storage > /opt/pv/pv_list.txt
+
+# Monitor the logs of pod "foo" and Extract log lines corresponding to error "file-not-found", Write them to "/opt/KUTR00101/foo" 
+k get pods
+k logs foo | grep -i "file-not-found" > /opt/KUTR00101/foo
+
+# find pods with label app=mysql that are executing high cpu workloads and write name of pod consuming the most cpu to file /opt/toppods.yaml
+k top pods -l app=mysql --sort-by=cpu
+echo 'mysql-deployment-77fgf-345' >> /opt/toppods.yaml
+
+# list all pods sorted by timestamp
+k get po --sort-by=.metadata.creationTimestamp
+
+# Check to see how many nodes are ready (excluding nodes tainted "NoSchedule") and write the number to /opt/KUSC00402/kusc00402.txt.
+k get nodes
+k describe nodes | grep Taints -A 5 # -A 5 : show the line with Taints and five lines after
+# counthow many are ready and have no taint the write the number to the file
+# or
+echo $(k get nodes --no-headers | grep -v 'NoSchedule' | grep -c 'Ready' | wc -l ) > opt/KUSC00402/kusc00402.txt
+# or
+k get nodes -o=custom-columns=NodeName:.meta.name,TaintKey:.spec.taints[*].key,TaintValue:.spec.taints[*].value,TaintEffect:.spec.taints[*].effect # then manually add all ready ones to the file 
+
+# find osImage of all nodes
+k get nodes -o=custom-columns="OSIMAGE:.status.nodeInfo.osImage" --no-header > /opt/outputs/os-list.txt
+
+# list the nginx pods with custom columns POD_NAME and POD_STATUS
+k get po -o=custom-columns="POD_NAME:.metadata.name,POD_STATUS:.status.containerStatuses[*].state"
+
+# print name of all deployments in admin2406 namespace
+# order: <deployment-name> <container-image> <readt-replica-count> <namespace>
+k -n admin2406 get deploy -o=custom-columns="DEPLOYMENT:.metadata.name,CONTAINER_IMAGE:.spec.template.spec.containers[*].image,READY_REPLICAS:.status.readyReplicas,NAMESPACE:.metadata.namespace" \
+--sort-by=.metadata.name > /opt/admin2406_data
+
+# show the pods AND THEIR CONTAINER's resource usage
+kubectl top pod --containers=true
+
+# shows the latest events in the whole cluster, ordered by time (metadata.creationTimestamp).
+kubectl get events -A --sort-by=.metadata.creationTimestamp
+# now delete a pod and get events caused by it, find all the events that happen after the "Killing" keyword in results
+k get events -A --sort-by=.metadata.creationTimestamp
+
+# Find the project-* Namespace with the highest number of Roles defined in it and write its name and amount of Roles into /opt/course/16/crowded-namespace.txt
+k get ns | grep project-  # find the namespaces
+k -n project-c13 get role --no-headers | wc -l  # 0
+k -n project-c14 get role --no-headers | wc -l  # 300
+k -n project-hamster get role --no-headers | wc -l  # 5
+k -n project-tiger get role --no-headers | wc -l # 2
+echo 'project-c14, 300' > /opt/course/16/crowded-namespace.txt
+
+# Check all available Pods in the Namespace project-c13 and find the names of those that would probably be terminated first if the nodes run out of resources (cpu or memory) 
+# to schedule all Pods. Write the Pod names into /opt/course/e1/pods-not-stable.txt.
+# Answer => When available cpu or memory resources on the nodes reach their limit, Kubernetes will look for Pods that are using more resources than they requested. These will be the 
+# first candidates for termination. If some Pods containers have no resource requests/limits set on them, then by default those are considered to use more than requested.
+# Kubernetes assigns Quality of Service (qos) classes to Pods based on the defined resources and limits, class Burstable => has resource requests/limits, classBestEffort => NO resource request/limit
+
+# see all pods with no resource section
+k get po -n project-c13 -o=custom-columns="NAME:.metadata.name,CPU:.spec.containers[*].resources.requests.cpu,MEM:.spec.containers[*].resources.requests.memory"  
+# these pods will be deleted first
+k get po -n project-c13 -o=custom-columns="NAME:.metadata.name,CLASS:.status.qosClass" | grep -i besteffort > /opt/course/e1/pods-not-stable.txt
