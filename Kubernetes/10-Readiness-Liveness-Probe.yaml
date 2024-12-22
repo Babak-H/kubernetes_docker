@@ -178,7 +178,7 @@ spec:
     livenessProbe:
       exec:
         command:
-        - 'true'
+        - 'true'   # true command should be between "" otherwise will get an error
     readinessProbe:
       exec:
         command: ["sh", "-c", "wget -T2 -O- http://service-am-i-ready:80"]
