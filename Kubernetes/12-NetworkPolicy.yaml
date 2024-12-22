@@ -297,4 +297,50 @@ spec:
       ports:                       
       - protocol: TCP
         port: 2222
-    
+
+
+# create a network policy that denies all ingress (incoming) traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: test-3
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress # if we do not mention any specific ingress policy , all is denied!
+
+
+# you have a cluster with pods in many namespaces. "db" pods in "project-a" namespace should only be acceesible from "service" pods that are 
+# running in "project-b" namespace => create networkPolicy
+k get po -n project-a --show-labels
+k get po -n project-b --show-labels
+k get ns project-a --show-labels
+k get ns project-b --show-labels
+k label namespace project-a ns=project-a
+k label namespace project-b ns=project-b
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-service-to-db
+  namespace: project-a
+spec:
+  podSelector:
+    matchLabels:
+      app: db  # applied only to pods that have app=db labels
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          ns: project-b  # Allow access from project-b namespace
+      podSelector:  # if we had - podSelector instead, it would become a OR condition
+         matchLabels:
+           app: service  # Allow access from pods with label app=service in project-b namespace
+           
+# test it
+# ping ip address of a project-a db pod from a project-b service pod
+k -n project-b exec service-*** -- ping 192.168.1.3
