@@ -130,6 +130,9 @@ metadata:
   name: my-busybox
   namespace: dev2406
 spec:
+  # make sure the pod is scheduled on the controlplane and no other node on the cluster
+  # we don't use nodeSelector or nodeAffinity here, since those are based on node labels and not NodeName
+  nodeName: controlplane
   volumes:
     - name: secret-volume
       secret:
@@ -144,19 +147,15 @@ spec:
         - name: secret-volume
           mountPath: /etc/secret-volume
           readOnly: true
-  # make sure the pod is scheduled on the controlplane and no other node on the cluster
-  # we don't use nodeSelector or nodeAffinity here, since those are based on node labels and not NodeName
-  nodeName: controlplane
-
 
 # taint = a trace of a bad or undesirable substance or quality
 # taint are sets on nodes
 # tolerations are set on pods (allowing pod to Tolerate the node's taint)
 # taint effect => NoSchedule | PreferNoSchedule | NoExecute
-# k taint nodes NODE-NAME key=value:taint-effect
+k taint node NODE-NAME key=value:taint-effect
+k taint node  node01    app=blue:NoSchedule
 
-# k taint node node01 app=blue:NoSchedule
-# k describe node node01 | grep -i Taint
+k describe node node01 | grep -i Taint
 
 ---
 apiVersion: v1
