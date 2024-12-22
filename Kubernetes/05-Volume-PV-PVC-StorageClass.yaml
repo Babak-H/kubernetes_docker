@@ -6,15 +6,14 @@ metadata:
   namespace: redis-ns
 spec:
   volumes:
-    - name: temp-vol
-      emptyDir:
-        medium: Memory
+    - name: tem-vol
+      emptyDir: {}
   containers:
   - image: redis:alpine
     name: redis-storage
     volumeMounts:
       - name: temp-vol
-        mountPath: "/data/redis"
+        mountPath:"/data/redis
 
 # Pod with Volumes defined inside it
 ---
@@ -456,3 +455,39 @@ spec:
     - targetPort: 4000
       port: 8080
       nodePort: 30097
+
+
+# Create a new PersistentVolumeClaim: Name: pv-volume | Class: csi-hostpath-sc | Capacity: 10Mi
+# Create a new Pod which mounts the PersistentVolumeClaim as a volume: Name: web-server, Image: nginx, Mount path: /usr/share/nginx/html, ReadWriteOnce access on the volume.
+# using kubectl edit or kubectl patch expand the PersistentVolumeClaim to a capacity of 70Mi and record that change.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: 
+  name: pv-volume
+spec:
+  accessModes:
+  - ReadWriteOnce  # ReadWriteOnce access on the volume, so should be same on pvc that chooses it
+  resources:
+    requests:
+      storage: 10Mi  # edit this to 70Mi
+  storageClassName: csi-hostpath-sc  # since we defined a storageClass, there is no need here to manually create a PersistentVolume
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-server
+spec:
+  volumes:
+  - name: pv-volume
+    persistentVolumeClaim:
+      claimName: pv-volume
+  containers:
+  - name: web-server
+    image: nginx
+    volumeMounts:
+    - mountPath: /usr/share/nginx/html
+      name: pv-volume
+
+k edit pvc pv-volume --record
+# or
+k patch pvc pv-volume '{"spec":{"resources":{"requests":{"storage":"70Mi"}}}}' --record
