@@ -46,6 +46,8 @@ metadata:
   name: john
 spec:
   request: ...
+  # Please note that an additional field called signerName should also be added when creating CSR.
+  # For client authentication to the API server we will use the built-in signer "kubernetes.io/kube-apiserver-client"
   signerName: https://kubernetes.io/kube-apiserver-client
   usage: 
   - client auth 
