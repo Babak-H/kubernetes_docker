@@ -1,3 +1,59 @@
+############################################## CoreDNS, DNS, CNI
+
+# Create a nginx pod called nginx-resolver using image nginx, expose it internally with a service called nginx-resolver-service. Test that you are able to look up 
+# the service and pod names from within the cluster. Use the image: busybox: 1.28 for dns lookup (create another pod to test the service). Record results in /root/KA/nginx.svc and /root/CKA/nginx.pod
+k run nginx-resolver --image=nginx
+k expose po ngnix-resolver --name=nginx-resolver-service --port=80
+k describe svc nginx-resolver-service # find its IP address
+k get po nginx-resolver -o wide # get it's ip address
+
+# only way to get logs from the pod to outside is run it in background, then exec to it and export results to some file
+k run busybox --image busybox:1.28 -- sleep 4800
+# since we are all on same namespace it can also be only : nginx-resolver-service
+k exec busybox -- nslookup nginx-resolver-service.default.svc.cluster.local > /root/KA/nginx.svc
+k exec busybox -- nslookup 10-244-192-2.default.pod.cluster.local > /root/CKA/nginx.pod
+
+# From the hr pod nslookup the mysql service (in payroll namespace) and redirect the output to a file /root/CKA/nslookup.out
+k exec hr -- nslookup mysql.payroll.svc.cluster.local > /root/CKA/nslook.out
+
+# coreDNS version
+k describe po coredns-xxx-xxx -n kube-system # coreDNS version is visible here
+
+# coreDNS TTL?
+# The TTL value used for CoreDNS lookup responses is configured within a 'ConfigMap' resource named 'coredns' located in the kube-system namespace. 
+k get configmap codedns -n kube-system
+  kubernetes cluster.local in-addr.arpa ip6.arpa {
+      pods insecure
+      fallthrough in-addr.arpa ip6.arpa
+      ttl 30   ###
+  }
+
+# Determine whether there are any pods running on the cluster that are not using CoreDNS for DNS resolution ?
+k get po -A -o=custom-columns="PodName:.metadata.name,DNSPOLICY:.spec.dnsPolicy"
+
+# Determine the Pod CIDR range used by the cluster.
+k get cm kube-proxy -n kube-system -o yaml | grep -i cidr  # 192.168.0.0/16
+
+# Determine which CNI provider is currently being used, and how IPAM has been configured for the pod network.
+# all CNI plugin configurartions and related things can be found at /etc/cni/net.d/
+ssh controlplane
+sudo -s
+ls /opt/cni/bin  # lists all available CNI and installed one
+cat /etc/cni/net.d/10-calico.conflist 
+  "ipam": {
+      "type": "calico-ipam"
+
+# Which Networking (or CNI Plugin) is configured and where is its config file?
+ls -la /etc/cni/net.d/
+# /etc/cni/net.d/
+# /etc/cni/net.d/10-weave.conflist
+
+cat /etc/cni/net.d/10-weave.conflist
+# {
+#     "cniVersion": "0.3.0",
+#     "name": "weave",
+
+################################################################################### Networking Linux Commands
 # Displays the network interfaces and their current statuses (up/down).
 ip link
 
@@ -151,50 +207,9 @@ ipcalc -b 192.14.41.6/24
         
 # Network:   192.14.41.0/24    is the ip range
 
-# unlock the certificate file/public key of type x509 encryption
-openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text -noout
-
-# Key-file : private key  |  cert-file : public key | trusted-ca-file : public key from CA
-
-# Certificate Authority:
-# generate private key
-openssel genrsa -out ca.key 2048  # ca.key
-# certificate signing request
-openssl req -new -key ca.key -subj “/CN=KUBERNETES-CA” -out ca.csr   # ca.csr  
-# generate public key for CA, we will use this key to send it to the server that we send request to, so that it can be sure the request is signed by correct CA
-openssl x509 -req -in ca.csr -signkey ca.key -out ca.crt  # ca.crt
-
-Admin user
-# generate private key
-openssl genrsa -out admin.key 2048  # admin.key
-# certificate signing request
-openssl req -new -key admin.key -subj “\CN=kube-admin/OU=system:masters” -out admin.csr # admin.csr
-# here we use the public and private keys from certificate authority, and sign the request
-openssl x509 -req -in admin.csr -CA ca.crt -CAkey ca.key -out admin.crt
-
-# Kube-scheduler, kube-controller-manager, kube-proxy
-# Generate keys
-# Certificate signing request
-# Sign certificates and generate public key
-
-# Kube-api-server:
-# generate private key
-openssl genrsa -out apiserver.key 2048
-# certificate signing request, use the private key
-openssl req -key apiserver.key -subj “/CN=kube-apiserver” -out apiserver.csr -config openssl.cnf
-# here we use the public and private keys from certificate authority, and sign the request
-openssl x509 -req -in apiserver.csr -CA ca.crt -CAkey ca.key -out apiserver.crt
-
 # difference between "sudo -i" and "sudo -s"
 sudo -i  # The -i option stands for "login shell." When you use sudo -i, it simulates a full login as the target user (by default, the root user). simulate a full login session for the target user, losing you current folder and setting
 sudo -s  # The -s option stands for "shell." When you use sudo -s, it opens a shell with elevated privileges but retains the current user's environment and maintain your current environment settings and working directory.
-
-# get all the running containers on this node
-crictl ps
-# same as above, but if docker is installed
-docker ps
-# get logs for a specific container
-crictl logs CONTAINER-ID
 
 # you are instructing the systemd system and service manager to reload its configuration files. This command is necessary when you have made changes to unit files (such as service files) or have added new ones, and 
 # you want systemd to recognize these changes without having to reboot the system.
