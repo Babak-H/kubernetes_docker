@@ -73,3 +73,38 @@ openssl x509 -noout -text -in /var/lib/kubelet/pki/kubelet-client-current.pem
 # kubelet server certificate ( the one used for incoming connections from the kube-apiserver, public-key of kube-apiserver), located at same folder as client pem file
 cat /var/lib/kubelet/pki/kubelet.crt
 openssl x509 -noout -text -in /var/lib/kubelet/pki/kubelet.crt
+
+
+# unlock the certificate file/public key of type x509 encryption
+openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text -noout
+
+# Key-file : private key  |  cert-file : public key | trusted-ca-file : public key from CA
+
+# Certificate Authority:
+# generate private key
+openssel genrsa -out ca.key 2048  # ca.key
+# certificate signing request
+openssl req -new -key ca.key -subj “/CN=KUBERNETES-CA” -out ca.csr   # ca.csr  
+# generate public key for CA, we will use this key to send it to the server that we send request to, so that it can be sure the request is signed by correct CA
+openssl x509 -req -in ca.csr -signkey ca.key -out ca.crt  # ca.crt
+
+Admin user
+# generate private key
+openssl genrsa -out admin.key 2048  # admin.key
+# certificate signing request
+openssl req -new -key admin.key -subj “\CN=kube-admin/OU=system:masters” -out admin.csr # admin.csr
+# here we use the public and private keys from certificate authority, and sign the request
+openssl x509 -req -in admin.csr -CA ca.crt -CAkey ca.key -out admin.crt
+
+# Kube-scheduler, kube-controller-manager, kube-proxy
+# Generate keys
+# Certificate signing request
+# Sign certificates and generate public key
+
+# Kube-api-server:
+# generate private key
+openssl genrsa -out apiserver.key 2048
+# certificate signing request, use the private key
+openssl req -key apiserver.key -subj “/CN=kube-apiserver” -out apiserver.csr -config openssl.cnf
+# here we use the public and private keys from certificate authority, and sign the request
+openssl x509 -req -in apiserver.csr -CA ca.crt -CAkey ca.key -out apiserver.crt
