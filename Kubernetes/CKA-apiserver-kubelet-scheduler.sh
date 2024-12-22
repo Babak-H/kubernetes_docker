@@ -1,3 +1,19 @@
+# kube-apiserver => heart of the kubernetes, connects all systems together
+# etcd => key-value database that keeps the latest value for different cluster related varialbes (how many nodes, how many pods, secrets, configmaps,...)
+# controller-manager => manages all controllers (deployment controller, pod controller, volume controller,...)
+# kube-scheduler => schedule which pod on which node
+# kube-proxy => creates services to connect pods together
+
+# kube-apiserver => 6443
+# kubelet => 10250  /var/lib/kubelet/
+# kube-scheduler => 10251
+# kube-controller-manager => 10252
+# etcd => 2379-2380
+
+# kubeadm => /etc/kubernetes/admin.conf
+# CNI => /etc/cni/inet.d/
+# static pods => /etc/kubernetes/manifests/
+
 ############################################## Kube-ApiServer
 
 # if there is a problem with kube-apiserver we can't access kubectl
