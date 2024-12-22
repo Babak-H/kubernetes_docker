@@ -388,25 +388,6 @@ data:
                       Signature Algorithm: sha256WithRSAEncryption
                       Signature Value: 65:...
 
-
----
-# Create a CertificateSigningRequest object with the name babak with the contents of the babak.csr file
-# cat babak.csr | base64 -w 0
-apiVersion: certificates.k8s.io/v1
-kind: CertificateSigningRequest
-metadata:
-  name: babak
-spec:
-  groups:
-  - system:authenticated
-  requests: LS0tLS1CRU...
-  # Please note that an additional field called signerName should also be added when creating CSR.
-  # For client authentication to the API server we will use the built-in signer "kubernetes.io/kube-apiserver-client"
-  signerName: kubernetes.io/kube-apiserver-client
-  usage:
-  - client auth
-
-  
 ---
 # cat /etc/kubernetes/kubelet.conf  # this is the kubeconfig file that kubelet uses to connect to kube-apiserver
       apiVersion: v1
