@@ -54,7 +54,6 @@ kind: PersistentVolume
 metadata:
   name: pv-vol1
 spec:
-  
   accessModes:
     - ReadWriteOnce
   # what happens when volume is released from PVC
