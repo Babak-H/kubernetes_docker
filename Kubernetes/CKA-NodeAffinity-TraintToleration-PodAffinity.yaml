@@ -304,4 +304,46 @@ spec:
           values:
           - restricted
         topologyKey: kubernetes.io/hostname
+
         
+# There should only ever be one Pod of that Deployment running on one worker node, use "topologyKey: kubernetes.io/hostname" for this
+# here we can use PodAntiAffinity rules to make sure that only one pod with label "id: very-important" runs on a node that has the label key of "kubernetes.io/hostname"
+# we are basically using deployment same way as a daemonset
+
+# k get po -n prpject-tiger --show-labels
+# k get node --show-labels
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    id: very-important                
+  name: deploy-important
+  namespace: project-tiger
+spec:
+  replicas: 3                        
+  selector:
+    matchLabels:
+      id: very-important
+  template:
+    metadata:
+      labels:
+        id: very-important
+    spec:
+      containers:
+      - image: nginx:1.17.6-alpine
+        name: container1
+      - image: google/pause
+        name: container2
+      # if there is a pod with "id:very-important" label, it should NOT be deployed on a Node that contains the label key "kubernetes.io/hostname" if there another pod with exact same label key-value on that node
+      affinity:                                             
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: id
+                operator: In
+                values:
+                - very-important
+            # Specify a topologyKey, which is a pre-populated Kubernetes label, you can find this by describing a node
+            topologyKey: kubernetes.io/hostname
