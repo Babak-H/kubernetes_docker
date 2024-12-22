@@ -674,6 +674,32 @@ k get clusterRoleBinding --no-header | wc -l
 # you can see subject of this rolebinding is system:bootstrappers:kubeadm
 k describe rolebinding kube-proxy -n kube-system
 
+# You have been asked to create a new ClusterRole for a deployment "pipeline" and bind it to a specific ServiceAccount scoped to a specific namespace.
+# Create a new ClusterRole named "deployment-clusterrole", which only allows to create the following resource types: "Deployment, StatefulSet, DaemonSet"
+# Create a new ServiceAccount named "cicd-token" in the existing namespace "app-team1", Bind the new ClusterRole "deployment-clusterrole" to the new ServiceAccount "cicd-token", 
+# limited to the namespace "app-team1".
+k create clusterrole deployment-clusterrole --verb=create --resource=deployment,statefulset,daemonset
+k create serviceaccount cicd-token -n app-team1
+# we are binding namespace scoped serviceAccount to a clusterRole via clusterRoleBinding
+k create clusterrolebinding deployment-clusterrolebinding --clusterrole=deployment-clusterrole --serviceaccount=app-team1:cicd-token -n app-team1
+k auth can-i create deployment -n app-team1 --as=system:serviceaccount:app-team1:cicd-token # yes
+k auth can-i create secret -n app-team1 --as=system:serviceaccount:app-team1:cicd-token # no
+
+# create a new serviceAccount with name "pvviewer", grant this SA access to "list all PVs" in the cluster by creating correct ClusterRole called 
+# "pvviewer-role" and clusterRoleBinding called "pvviewer-role-binding"
+k create serviceaccount pvviewer
+k get sa
+k create clusterrole pvviewer-role --verb=list --resource=persistentvolumes
+k create clusterrolebinding pvviewer-role-binding --clusterrole=pvviewer-role --serviceaccount=default:pvviewer
+k auth can-i list persistentvolumes --as=system:serviceaccount:default:pvviewer # yes
+
+# create a new serviceAccount "gitops" in namespace "project-1" create role and rolebinding both named "gitops-role" and "gitops-rolebinding". allows the SA 
+# to create secrets and configmaps in the namespace
+k create serviceaccount gitops -n project-1
+k create role gitops-role -n project-1 --verb=create --resources=secrets,configmaps
+k create rolebinding gitops-rolebinding -n project-1 --role=gitops-role --serviceaccount=project-1:gitops
+k auth can-i create secret -n project-1 --as system:serviceaccount:project-1:gitops
+
 ##### Job ##########################################################################
 
 k get job
