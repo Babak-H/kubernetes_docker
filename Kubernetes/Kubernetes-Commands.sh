@@ -111,6 +111,10 @@ k get all -A
 k get all | grep AppName
 k get all | grep mongodb
 
+# get all namespaced resources
+k api-resources # all resources availabel
+k api-resources --namespaced -o=name  # get name of all namespaced resources
+
 ##### POD ##########################################################################
 
 # show all pods
