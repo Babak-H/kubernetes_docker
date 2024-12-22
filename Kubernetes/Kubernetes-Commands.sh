@@ -115,6 +115,8 @@ k get all | grep mongodb
 k api-resources # all resources availabel
 k api-resources --namespaced -o=name  # get name of all namespaced resources
 
+CTRL+R # you can write starting part of the command, terminal will search and find closest one from history, press enter to re-execute that command
+
 ##### POD ##########################################################################
 
 # show all pods
