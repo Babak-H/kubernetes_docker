@@ -347,3 +347,45 @@ spec:
                 - very-important
             # Specify a topologyKey, which is a pre-populated Kubernetes label, you can find this by describing a node
             topologyKey: kubernetes.io/hostname
+
+
+# mark the worker node named kworker and unschedulable and reschedule all the pods running on it => schedule to another node
+k get pods -o wide # check if any pod is scheduled on kworker node
+k get nodes
+k cordon kworker # always do cordon before drain, to prevent future pods to be scheduled here!
+k drain kworker --ignore-daemonsets  # error is because one of the pods on this node is using local volumes (emptyDir type), need to add extra flag for it
+k drain kworker --ignore-daemonsets --delete-emptydir-data
+kubectl get pods -o wide
+# to revert this later
+k uncordon kworker
+
+# Taint the worker node to be Unschedulable. Once done, create a pod called dev-redis, image redis:alpine to ensure workloads are not scheduled to this worker node. Finally, 
+# create a new pod called prod-redis and image redis:alpine with toleration to be scheduled on node01. 
+# key: env_type, value: production, operator: Equal and effect: NoSchedule
+k get nodes -o wide
+k taint node node01 env_type=production:NoSchedule 
+k describe nodes node01 | grep -i taint 
+k run dev-redis --image=redis:alpine --dry-run=client -o yaml > pod-redis.yaml
+kubectl apply -f pod-redis.yaml  # this will not be scheduled on node01
+k get po -o wide
+
+---
+apiVersion: v1 
+kind: Pod 
+metadata:
+  name: prod-redis  # edit here
+spec:
+  # add toleration here
+  tolerations:
+  - key: env_type
+    operator: Equal
+    value: production
+    effect: NoSchedule
+  containers:
+  - name: prod-redis # edit here 
+    image: redis:alpine
+
+kubectl get pods -o wide  # pod prod-redis CAN be scheduled on node01
+
+# Determine worker node1's Pod capacity (cluster-node1 - 10.0.0.10)
+k describe node node01 | grep "pods:"  # pods: 110
