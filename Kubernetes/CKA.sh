@@ -1,27 +1,3 @@
-# kube-apiserver => heart of the kubernetes, connects all systems together
-# etcd => key-value database that keeps the latest value for different cluster related varialbes (how many nodes, how many pods, secrets, configmaps,...)
-# controller-manager => manages all controllers (deployment controller, pod controller, volume controller,...)
-# kube-scheduler => schedule which pod on which node
-# kube-proxy => creates services to connect pods together
-
-# kube-apiserver => 6443
-# kubelet => 10250  /var/lib/kubelet/
-# kube-scheduler => 10251
-# kube-controller-manager => 10252
-# etcd => 2379-2380
-
-# kubeadm => /etc/kubernetes/admin.conf
-# CNI => /etc/cni/inet.d/
-# static pods => /etc/kubernetes/manifests/
-
-# drain vs cordon
-# Cordon => used to mark a node as unschedulable. This means that no new pods will be scheduled on the node, but existing pods will continue to run.
-# Drain => used to safely evict all pods from a node. This prepares the node for maintenance or decommissioning by ensuring that all workloads are moved elsewhere.
-# first cordon, then drain
-
-# untaint node
-k taint nodes controlplane node-role.kubernetes.io/control-plane:NoSchedule-
-
 # what is the range of IP adresses configured for pods on this cluster?
 # the ntwrok is configured with weave. check the weave pods logs
 k logs weave-net-bk9h7 -n kube-system | grep -i ipalloc
@@ -977,10 +953,7 @@ k get nodes -o=jsonpath='{.items[*].metadata.name}' > /opt/outputs/node_names.tx
 # Use JSON PATH query to retrieve the osImages of all the nodes and store it in a file /opt/outputs/nodes_os.txt
 k get nodes -o=jsonpath='{.items[*].status.nodeinfo.osImage}' > /opt/outputs/node_os.txt
 
-# A kube-config file is present at /root/my-kube-config. Get the user names from it and store it in a file /opt/outputs/users.txt
-k config view --kubeconfig=/root/my-kube-config
-k config view --kubeconfig=/root/my-kube-config -o json
-k config view --kubeconfig=/root/my-kube-config -o=jsonpath='{.users[*].name}' > /opt/outputs/users.txt
+
 
 ### Upgrade the current version of kubernetes from 1.30.0 to 1.31.0 exactly using the kubeadm utility. Make sure that the upgrade is carried out one node at a time starting with the controlplane node. 
 # To minimize downtime, the deployment gold-nginx should be rescheduled on an alternate node before upgrading each node.
