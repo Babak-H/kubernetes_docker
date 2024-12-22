@@ -72,12 +72,12 @@ spec:
 # Do not override any taints currently in place. 
 # => Use DaemonSet to complete this task and use ds-kusc00201 as DaemonSet name.
 # Do not override any taints => do not edit Node taints, change pod tolerations to be able to deploy pods on controlplane node
+    # k get nodes --show-labels
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: ds-kusc00201
-  namespace: kube-system # ??
 spec:
   selector:
     matchLabels:
@@ -87,9 +87,58 @@ spec:
       labels:
         app: nginx
     spec:
+      # these ones allow the pod to even run on controlplane
       tolerations:
       - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
         effect: NoSchedule
       containers:
       - name: nginx
         image: nginx
+
+# use namespace "project-1" for following. create DaemonSet named "daemon-imp" with image "httpd:2.4-alpine" and labels "id=daemon-imp" and "uuid=184". 
+# its pods should request "20 millicore" cpu and "20 mebabytes" memory. the pods of the daemonset should run on ALL Nodes, including controlplanes
+k get nodes --show-labels
+k get ns
+k create ns project-1 # in case not existing
+
+apiVersion: v1
+kind: DaemonSet
+metadata:
+  name: daemon-imp
+  namespace: project-1
+  labels:
+    id: daemon-imp
+    uuid: 18426a0b-5f59-4e10-923f-c0e078e82462
+spec:
+  selector:
+    matchLabels:
+    id: daemon-imp
+    uuid: 18426a0b-5f59-4e10-923f-c0e078e82462    
+  template:
+    metadata:
+      labels:
+        id: daemon-imp
+        uuid: 18426a0b-5f59-4e10-923f-c0e078e82462    
+    spec:
+      tolerations:
+      # It was requested that the DaemonSet runs on all nodes, so we need to specify the toleration for this
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - image: httpd:2.4-alpine
+        name: daemon-imp
+        resources:
+          requests:
+            memory: 20Mi
+            cpu: 20m
+
+k get ds -n project-1 -o wide
+k get po -n project-1 -o wide # check the nodes where pods are running on
