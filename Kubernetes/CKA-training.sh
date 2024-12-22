@@ -65,6 +65,8 @@ exit
 k uncordon worker-node-3
 k get nodes
 
+# if the worker node has NOT joined the cluster, running "kubeadm upgrade node" will result in error
+
 #################################################################################### Join Node to cluster => search "token join" or "kubeadm token"
 # join node01 worker node to cluster and you have to deploy pod on the node01, pod name should be web and image should be nginx
 
@@ -89,7 +91,6 @@ k get po
 #################################################################################### ETCD Backup Restore => search "etcd backup"
 # create a snapshot of the existing etcd instance running at https://127.0.0.1:2379, saving the snapshot to /var/lib/backup/etcd-snapshot.db
 # ca certificate => /opt/kuin/ca.crt   client-certificate => /opt/kuin/etcd-client.crt  client-key => /opt/kuin/etcd-client.key
-
 ssh controlplane
 k get po -n kube-system # make sure there is a pod related to etcd here, it means that it is on this node
 sudo -s  # backup can only be performed when you are root user
@@ -224,6 +225,13 @@ kubectl get nodes
 echo journalctl -u kubelet > /home/ubuntu/kubelet.sh
 echo k logs kube-scheduler-ip-10-0-0-100.us-west-2.compute.internal -n kube-system > /home/ubuntu/scheduler.sh
 
+# kubelet client certificate (the one used for outgoing connections to the kube-apiserver)
+cat /var/lib/kubelet/pki/kubelet-client-current.pem # its location can be fined in kubeconfig file that kubelet use to connect to controlplane at ~/.kube/...
+openssl x509 -noout -text -in /var/lib/kubelet/pki/kubelet-client-current.pem
+# kubelet server certificate ( the one used for incoming connections from the kube-apiserver), located at same folder as client pem file
+cat /var/lib/kubelet/pki/kubelet.crt
+openssl x509 -noout -text -in /var/lib/kubelet/pki/kubelet.crt
+
 ############################################## KubeConfig
 # a kubeconfig file called "admin.kubeconfig" has been created in /root/CKA . there is something wrong with the configuration. troubleshoot and fix it
 # make sure the port for kube-apiserver is correct. correct port number is "6443"
@@ -304,6 +312,12 @@ systemctl daemon-reload
 crictl ps
 # accessing all container logs when kube-apiserver is down 
 crictl logs <CONTAIMER-ID>
+# delete a container by it's ID
+crictl rm <CONTAIMER-ID>
+# delete a image by its id
+crictl rmi <IMAGE-ID>
+# find the runtimeType of the running container
+crictl inspect <CONTAIMER-ID> | grep runtimeType  # "runtimeType": "io.containerd.runc.v2"
 
 # Determine the Service CIDR range used by the cluster.
 k get po kube-apiserver-xxx-xxx -n kube-system -o yaml | grpe -i "service-cluster-ip-range"  # - --service-cluster-ip-range=10.96.0.0/12
@@ -325,6 +339,7 @@ cat /etc/cni/net.d/10-weave.conflist
 #     "name": "weave",
 
 # Which suffix will static pods have that run on cluster1-node1? => The suffix is the node hostname with a leading hyphen "-cluster1-node1"
+
 ############################################## Scheduler
 # how to stop kube-scheduler => either move the pod to another folder outside manifests OR just comment some parts of it
 # check 
@@ -441,8 +456,18 @@ kubectl top pod --containers=true
 
 # shows the latest events in the whole cluster, ordered by time (metadata.creationTimestamp).
 kubectl get events -A --sort-by=.metadata.creationTimestamp
-                                       
-#################################################################################### Certificates and Users
+# now delete a pod and get events caused by it, find all the events that happen after the "Killing" keyword
+k get events -A --sort-by=.metadata.creationTimestamp
+
+# Find the project-* Namespace with the highest number of Roles defined in it and write its name and amount of Roles into /opt/course/16/crowded-namespace.txt
+k get ns | grep project-  # find the namespaces
+k -n project-c13 get role --no-headers | wc -l  # 0
+k -n project-c14 get role --no-headers | wc -l  # 300
+k -n project-hamster get role --no-headers | wc -l  # 5
+k -n project-tiger get role --no-headers | wc -l # 2
+echo 'project-c14, 300'
+
+#################################################################################### Certificates and Users => search kubeadm certs
 # analyze and document all X509 certificates currently being used within the provided cluster using just the kubeadm tool
 # update and renew the expiry date within the TLS certificate used by the Kubernetes API server
 ssh controlplane
@@ -502,6 +527,11 @@ echo "Dec 06, 2025 09:13 UTC" > /root/apiserver-expiration
 #  Using kubeadm, renew the certificates of the apiserver and scheduler.conf
 kubeadm certs renew apiserver
 kubeadm certs renew scheduler.conf
+# renew all
+kubeadm certs renew all
+
+# how to manually check the certificate start time and expiration date
+openssl x509 -noout -text -in /etc/kubernetes/pki/apiserver.crt
 
 #################################################################################### PodAffinity, PodAntiAffinity, Topology
 # There should only ever be one Pod of that Deployment running on one worker node, use "topologyKey: kubernetes.io/hostname" for this
@@ -539,3 +569,10 @@ spec:
                 - very-important
             # Specify a topologyKey, which is a pre-populated Kubernetes label, you can find this by describing a node
             topologyKey: kubernetes.io/hostname
+
+# Check all available Pods in the Namespace project-c13 and find the names of those that would probably be terminated first if the nodes run out of resources (cpu or memory) to schedule all Pods. Write the Pod names into /opt/course/e1/pods-not-stable.txt.
+# Answer => When available cpu or memory resources on the nodes reach their limit, Kubernetes will look for Pods that are using more resources than they requested. These will be the first candidates for termination. If some Pods containers have no resource requests/limits set, 
+# then by default those are considered to use more than requested.
+# Kubernetes assigns Quality of Service classes to Pods based on the defined resources and limits, Burstable => has resource requests/limits, BestEffort => no resource request/limit
+k get po -n project-c13 -o=custom-columns="NAME:.metadata.name,CPU:.spec.containers[*].resources.requests.cpu,MEM:.spec.containers[*].resources.requests.memory"  # see all pods with no resource section
+k get po -n project-c13 -o=custom-columns="NAME:.metadata.name,CLASS:.status.qosClass" | grep -i besteffort  # these pods will be deleted first
