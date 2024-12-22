@@ -562,6 +562,10 @@ k create ingress ingress-test --rule="wear.my-online-store.com/wear*=wear-servic
 k get svc # get port on the service
 k create ingress ingress-service --rule="ckad-mock-exam-solution.com/video*=my-video-service:8080" --dry-run=client -o yaml > ingress.yaml
 
+k create ingress pong -n ing-internal --rule="/hello=hello:5678" --dry-run=client -o yaml > ing.yaml
+k get nodes -o wide
+curl -KL NODE-INTERNAL-IP/hello
+
 ##### HPA Horizontal Pod Autoscaler ##########################################################################
 
 k apply -f my-hpa.yaml
