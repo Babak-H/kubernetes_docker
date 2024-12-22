@@ -251,6 +251,50 @@ spec:
     - namespaceSelector:
         matchLabels:
           name: project-b  # Allow access from project-b namespace
-    - podSelector:
+      podSelector:
          matchLabels:
            app: service  # Allow access from pods with label app=service in project-b namespace
+
+
+# create a NetworkPolicy called np-backend in Namespace project-snake. It should allow the backend-* Pods only to connect to db1-* Pods on port 1111, connect to db2-* Pods on port 2222
+k -n project-snake get po 
+# backend-0   1/1     Running   0          8s
+# db1-0       1/1     Running   0          8s
+# db2-0       1/1     Running   0          10s
+
+k -n project-snake get po --show-labels
+# backend-0   1/1     Running   0          3m15s   app=backend
+# db1-0       1/1     Running   0          3m15s   app=db1
+# db2-0       1/1     Running   0          3m17s   app=db2
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: np-backend
+  namespace: project-snake
+spec:
+  # since we want to restrict where backend-* pods send data to, its applied on them
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Egress
+  egress:
+    # each -to or -from section can only have ONE ports section under it
+    # if we put ports section under egress, the port will be allowed for ALL PODS connections
+    - to:
+      - podSelector:
+          matchLabels:
+            app: db1
+      ports:                        
+      - protocol: TCP
+        port: 1111
+    - to:                         
+      - podSelector:
+          matchLabels:
+            app: db2
+      ports:                       
+      - protocol: TCP
+        port: 2222
+    
