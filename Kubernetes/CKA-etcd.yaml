@@ -1,3 +1,6 @@
+kubectl logs etcd-controlplane -n kube-system | grep -i 'etcd-version'
+kubectl describe po etcd-controlplane -n kube-system
+
 # create a snapshot of the existing etcd instance running at https://127.0.0.1:2379, saving the snapshot to /var/lib/backup/etcd-snapshot.db
 # ca certificate => /opt/kuin/ca.crt   client-certificate => /opt/kuin/etcd-client.crt  client-key => /opt/kuin/etcd-client.key
 ssh controlplane
@@ -35,3 +38,34 @@ k get po -n kube-system
 # take the backup of the ETCD at the location "/opt/etcd-backup.db" on the "controlplane" node
 export ETCDCTL_API=3
 etcdctl snapshot save /opt/etcd-backup.db --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --endpoint=127.0.0.1:2379 
+
+
+# backup etcd from another machine/cluster
+kubectl get nodes
+ssh cluster1-controlplane
+cat /etc/kubernetes/manifests/etcd.yaml
+kubectl describe pods -n kube-system etcd-cluster1-controlplane | grep advertise-client-urls  # https://192.160.244.10:2370
+kubectl describe pods -n kube-system etcd-cluster1-controlplane | grep pki  # get values for --cacert, --cert, and --key
+ETCDCTL_API=3 etcdctl --endpoints=https://192.160.244.10:2370 \
+--cacert=/etc/kubernetes/pki/etcd/ca.crt \
+--cert=/etc/kubernetes/pki/etcd/server.crt \
+--key=/etc/kubernetes/pki/etcd/server.key \
+snapshot save /opt/cluster1.db
+
+# copy the backup to another machine
+scp cluster1-controlplane:/opt/cluster1.db /opt
+
+ssh node01
+service kubelet status
+
+# *** how can restoring an older version of etcd cluster restore deployments and daemonsets automatically?
+# Restoring an older version of an etcd cluster can automatically restore Kubernetes resources like Deployments and DaemonSets because etcd is the primary data store for Kubernetes. Here's how it works:
+# 1. **etcd as the Data Store**: In a Kubernetes cluster, etcd is used to store the entire state of the cluster. This includes all the configuration data, the state of all the resources (like Pods, Deployments, Services, etc.), and the cluster metadata.
+# 2. **Snapshot and Restore**: When you take a snapshot of your etcd cluster, you are capturing the entire state of the Kubernetes cluster at that point in time. This snapshot includes all the information about Deployments, DaemonSets, and other resources.
+# 3. **Restoring etcd**: When you restore an etcd snapshot, you are effectively reverting the cluster's state to what it was at the time the snapshot was taken. This means that all the resources that existed at that time, including Deployments and DaemonSets, 
+# are restored to their previous state.
+# 4. **Automatic Reconciliation**: Kubernetes has a reconciliation loop that continuously works to ensure that the actual state of the cluster matches the desired state as defined in etcd. When you restore etcd, the desired state is updated to reflect 
+# the snapshot, and Kubernetes will automatically work to bring the actual state of the cluster in line with this restored desired state. This means that any Deployments or DaemonSets that were present in the snapshot will be recreated and managed 
+# according to their specifications.
+# In summary, restoring an etcd snapshot effectively rolls back the entire cluster to a previous state, including all the resources and configurations that were present at that time. Kubernetes then automatically reconciles the cluster to match this 
+# restored state, which includes recreating Deployments and DaemonSets as needed.
