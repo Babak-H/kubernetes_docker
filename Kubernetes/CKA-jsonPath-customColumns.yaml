@@ -59,3 +59,14 @@ echo 'project-c14, 300' > /opt/course/16/crowded-namespace.txt
 k get po -n project-c13 -o=custom-columns="NAME:.metadata.name,CPU:.spec.containers[*].resources.requests.cpu,MEM:.spec.containers[*].resources.requests.memory"  
 # these pods will be deleted first
 k get po -n project-c13 -o=custom-columns="NAME:.metadata.name,CLASS:.status.qosClass" | grep -i besteffort > /opt/course/e1/pods-not-stable.txt
+
+# find all static pods
+kubectl get po -A | grep controlplane
+kubectl get po -A -o wide | grep controlplane
+
+# do it inside the controlplane
+ssh controlplane
+ls /etc/kubernetes/manifests
+
+# get all events
+kubectl get events -o wide
