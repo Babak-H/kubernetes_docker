@@ -142,3 +142,79 @@ spec:
   containers:
   - image: httpd:2.4-alpine
     name: manual-schedule
+
+
+# Even though the deployment was scaled to 2, the number of PODs does not seem to increase. Investigate and fix the issue.
+# Inspect the component responsible for managing deployments and replicasets.
+k describe deploy app # everything seems fine
+k get po -n kube-system
+#  NAME                                   READY   STATUS             RESTARTS      AGE
+#  coredns-77d6fd4654-kcqp4               1/1     Running            0             18m
+#  coredns-77d6fd4654-rvrk4               1/1     Running            0             18m
+#  etcd-controlplane                      1/1     Running            0             18m
+#  kube-apiserver-controlplane            1/1     Running            0             18m
+#  kube-controller-manager-controlplane   0/1     CrashLoopBackOff   7 (88s ago)   12m   ###
+#  kube-proxy-d4z2v                       1/1     Running            0             18m
+#  kube-scheduler-controlplane            1/1     Running            1 (13m ago)   12m
+
+k logs kube-controller-manager-controlplane -n kube-system
+# Generated self-signed cert in-memory
+# "command failed" err="stat /etc/kubernetes/controller-manager-xxx.conf: no such file or directory"
+cat /etc/kubernetes/manifests/kube-controller-manager.yaml
+vi /etc/kubernetes/manifests/kube-controller-manager.yaml
+        # spec:
+        # containers:
+        # - command:
+        #     - --kubeconfig=/etc/kubernetes/controller-manager-xxx.conf   #### correct it to "controller-manager.conf"
+
+############################################## Controller-Manager
+
+# Something is wrong with scaling again. We just tried scaling the deployment to 3 replicas. But it's not happening.
+k get deploy
+k describe deploy 
+# Replicas:  3 desired | 2 updated | 2 total | 2 available | 0 unavailable
+k get po -n kube-system
+# NAME                                   READY   STATUS             RESTARTS      AGE
+# coredns-77d6fd4654-kcqp4               1/1     Running            0             38m
+# coredns-77d6fd4654-rvrk4               1/1     Running            0             38m
+# etcd-controlplane                      1/1     Running            0             38m
+# kube-apiserver-controlplane            1/1     Running            0             38m
+# kube-controller-manager-controlplane   0/1     CrashLoopBackOff   5 (16s ago)   3m27s         ####
+# kube-proxy-d4z2v                       1/1     Running            0             38m
+# kube-scheduler-controlplane            1/1     Running            1 (33m ago)   32m
+
+k logs kube-controller-manager-controlplane -n kube-system
+# Generated self-signed cert in-memory
+# "command failed" err="unable to load client CA provider: open /etc/kubernetes/pki/ca.crt: no such file or directory"
+
+ls /etc/kubernetes/pki/ca.crt # this file should be mounted within controller manager as volume
+cat /etc/kubernetes/manifests/kube-controller-manager.yaml
+cat /etc/kubernetes/manifests/kube-controller-manager.yaml | grep /etc/kubernetes/pki/ca.crt
+#     - --client-ca-file=/etc/kubernetes/pki/ca.crt
+#     - --cluster-signing-cert-file=/etc/kubernetes/pki/ca.crt
+#     - --root-ca-file=/etc/kubernetes/pki/ca.crt
+
+vi /etc/kubernetes/manifests/kube-controller-manager.yaml
+# Check the volume mount path in kube-controller-manager manifest file at /etc/kubernetes/manifests.
+# It appears the path /etc/kubernetes/pki is not mounted from the controlplane to the kube-controller-manager pod. If we inspect the pod manifest file,
+# we can see that the incorrect hostPath is used for the volume:
+
+# volumeMounts:
+# - mountPath: /etc/kubernetes/pki   # this is where we save it on the pod
+#   name: k8s-certs
+
+## WRONG:
+# volumes:
+# - hostPath:
+#    path: /etc/kubernetes/WRONG-PKI-DIRECTORY  # change this
+#    type: DirectoryOrCreate
+#   name: k8s-certs
+
+## CORRECT:
+# volumes:
+# - hostPath:
+#    path: /etc/kubernetes/pki  # this is where we access it from the node
+#    type: DirectoryOrCreate
+#  name: k8s-certs
+
+# Once the path is corrected, the pod will be recreated and our deployment should eventually scale up to 3 replicas.
