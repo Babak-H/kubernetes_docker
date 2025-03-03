@@ -187,6 +187,9 @@ k exec -it nginx-webapp-7anc5464m -c main-container -- /bin/sh
 
 # exec into the cockroach client pod, run sql client with the url of the database
 k exec -it cockroach-client-0 -n 105250-cockroach-sql-client -- ./cockroach sql --url="postgresql://hault@cockroach/*****"
+
+kubectl exec -it -n core-hault hault-restore-0 -c cockroach-1 -- sh
+
 # execute one command inside the pod
 k exec webapp -- cat /log/app.log
 # show all environment variables inside the pod
@@ -225,6 +228,8 @@ k cp -n default my-pod:/path/to/file.txt my-file.txt
 k cp -n default file.txt my-pod:/path/to/file.txt
 
 k cp -n vault-operators crown-operator-XXXXX:/var/run/kubernetes.io/serviceaccount/data/ca.crt  ./cert_operator-sa 
+
+k cp -n 105250-vault-operators ./script.sh vault-operator-tqdcf:/tmp/ -c installer-prerequisite-configuration-container
 
 # Create a busybox pod with 'sleep 3600' as arguments. Copy '/etc/passwd' from the pod to your local folder
 k run busybox --image=busybox -- bin/sh -c "sleep 3600"
@@ -649,6 +654,15 @@ k rollout undo deploy nginx --to-revision=2
 # how to restart the whole deployment step-by-step
 # the pods will be restarted based on max surge and max unavailable values
 k rollout restart deploy -n 105250-core-vault
+
+##### Patch ##########################################################################
+
+k patch -n kube-system daemonset/istio-cni-node --type json -p='[{"op": "remove", "path": "/spec/template/spec/containers/0/resources/limits/cpu"}]' 
+k patch -n kube-system clusterrole/istio-cni --type json -p='[{"op": "add", "path": "/rules/0/verbs", "value": ["get", "list", "watch", "delete"]}]'
+
+k set env -n kube-system daemonset/istio-cni-node REPAIR_DELETE_PODS="true" REPAIR_REPAIR_PODS="false"
+
+kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/core-vt/deployments.apps/postings-processor/max_service_consumer_group_lag"{"kind":"MetricValueList","apiVersion":"custom.metrics.k8s.io/v1beta1","metadata":{},"items":[{"describedObject":{"kind":"Deployment", "name":"postings-processor","apiVersion":"apps/v1"},"metricName":"max_service_consumer_group_lag","timestamp":"2024-02-27T16:21:55Z","value":"0","selector":null}]}
 
 ##### Roles and RoleBindings ##########################################################################
 
