@@ -662,7 +662,9 @@ k patch -n kube-system clusterrole/istio-cni --type json -p='[{"op": "add", "pat
 
 k set env -n kube-system daemonset/istio-cni-node REPAIR_DELETE_PODS="true" REPAIR_REPAIR_PODS="false"
 
-kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/core-vt/deployments.apps/postings-processor/max_service_consumer_group_lag"{"kind":"MetricValueList","apiVersion":"custom.metrics.k8s.io/v1beta1","metadata":{},"items":[{"describedObject":{"kind":"Deployment", "name":"postings-processor","apiVersion":"apps/v1"},"metricName":"max_service_consumer_group_lag","timestamp":"2024-02-27T16:21:55Z","value":"0","selector":null}]}
+k get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/core-vt/deployments.apps/postings-processor/max_service_consumer_group_lag"{"kind":"MetricValueList","apiVersion":"custom.metrics.k8s.io/v1beta1","metadata":{},"items":[{"describedObject":{"kind":"Deployment", "name":"postings-processor","apiVersion":"apps/v1"},"metricName":"max_service_consumer_group_lag","timestamp":"2024-02-27T16:21:55Z","value":"0","selector":null}]}
+k get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/<VAULT_NS>/deployments.apps/<DEPLOYMENT_NAME>/max_service_consumer_group_lag" | jq
+k get --raw "/apis/custom.metrics.k8s.io/v1beta1"
 
 ##### Roles and RoleBindings ##########################################################################
 
