@@ -159,6 +159,9 @@ k logs -f my-pod -c first-container # logs of specific container in multi-contai
 # If pod crashed and restarted, get logs about the previous instance (previous version before the update)
 k logs nginx -p
 
+# Find crashed pods:
+kubectl get pods -n NAMESPACE -o wide | grep crash
+
 # get logs for container log-x in pod dev-pod-dind-878516, get all the warnings, and redirect them to file /opt/dind-878516_logs.txt
 k logs dev-pod-dind-878516 -c log-x | grep -i WARNING > /opt/dind-878516_logs.txt
 
