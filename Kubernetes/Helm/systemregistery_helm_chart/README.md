@@ -42,3 +42,13 @@ helmfile list
 
 ### delete all the service
 helmfile destroy
+
+
+## install metric server: 
+helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+helm upgrade --install metrics-server metrics-server/metrics-server
+
+## install kube-state-metrics:
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm install kubestatemetrics prometheus-community/kube-state-metrics
