@@ -349,6 +349,11 @@ k run nginx --image=nginx --command -- echo 'hi'
 k run busybox --image busybox -it --rm --restart=Never -- /bin/sh -c 'echo hello world'
 k get po
 
+# list all pods and its nodes
+kubectl get pod -o wide
+kubectl get pods --all-namespaces
+kubectl get pod --all-namespaces -o json | jq '.items[] | .spec.nodeName + " " + .status.podIP'
+
 ##### ReplicaSet ##########################################################################
 
 k get replicaset new-replicaset -o wide
