@@ -912,6 +912,18 @@ vi kube-apiserver.yaml
 # get info about specific section of a yaml object
 kubectl explain cronjob.spec.jobTemplate --recursive
 
+##########################################################################
+
+# i have script A inside a pod in namespace 1 and want to execute it from another pod in namesapce B, what is the correct command for this?
+kubectl exec -n namespace-1 pod-name -- /path/to/script.sh
+
+
+# In Kubernetes, you can't directly "mount" one deployment onto a job. However, you can share data between a deployment and a job using shared storage, such as a PersistentVolume (PV) and a PersistentVolumeClaim (PVC). This allows both the deployment and the job to access the same data.
+
+# Create a PersistentVolume: This represents a piece of storage in your cluster.
+# Create a PersistentVolumeClaim: This is a request for storage by a pod. Both the deployment and the job will use the same PVC to access the shared storage.
+# Mount the PVC in both the Deployment and the Job: This allows both to read from and write to the same storage.
+
 ##### HELM ##########################################################################
 
 # shows name of operating system
