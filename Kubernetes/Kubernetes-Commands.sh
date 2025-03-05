@@ -247,6 +247,15 @@ k cp -n 105250-vault-operators ./script.sh vault-operator-tqdcf:/tmp/ -c install
 k run busybox --image=busybox -- bin/sh -c "sleep 3600"
 k cp default/busybox:/etc/passwd /root/passwd # since we are copying a file we should give it a name in local folder too
 
+# this command will make the file inside the local machine, but i want it to be created inside the same pod
+kubectl exec vt-tools-repub-cron-28941778-65k7z -n 432235-vt-operators -- ./scripts/vt_list_postings_failures.sh > /tmp/temp_ids.txt
+# To create a file inside the same pod where the script is executed, you need to redirect the output within the context of the pod itself. You can achieve this by including 
+# the redirection as part of the command executed by kubectl exec
+kubectl exec vt-tools-repub-cron-28941778-65k7z -n 432235-vt-operators -- sh -c './scripts/vault_list_post_postings_failures.sh > /tmp/temp_ids.txt'
+# sh -c: This tells the shell to execute the following string as a command. It's necessary because the redirection (>) needs to be interpreted by the shell within the pod.
+# './scripts/vault_list_post_postings_failures.sh > /tmp/temp_ids.txt': This is the command string that gets executed inside the pod. The script's output is redirected to /tmp/temp_ids.txt within the pod's filesystem.
+
+
 # create a busybox pod and wget the above nginx pod's main page
 k run busybox --image=busybox --command -- wget -o- NGNIX_IP_ADDRESS:PORT
 
@@ -261,6 +270,10 @@ k annotate pod -l app=v2 owner=marketing
 
 # Remove the 'app' label from the pods we created before
 k label pod nginx{1..3} app-
+
+# add several labels to a kubernetes serviceaccount via commandline
+kubectl label serviceaccount <serviceaccount-name> -n <namespace> key1=value1 key2=value2 key3=value3
+kubectl label serviceaccount my-serviceaccount -n default env=production team=devops
 
 # Annotate pods nginx1, nginx2, nginx3 with "description='my description'" value
 # annotating 3 pods all at once
@@ -419,6 +432,16 @@ k label deploy foo --overwrite app=foo1
 
 # create service for deployment foo on port 6262
 k expose deploy foo --port 6262 --target-port 8080
+
+# To access a Kubernetes pod via a browser, you typically need to expose the pod using a Kubernetes Service. This service can be of type NodePort, LoadBalancer, or Ingress,
+# depending on your cluster setup and requirements
+kubectl expose pod <pod-name> --type=NodePort --port=<port>
+kubectl get service <pod-name>
+# You can now access the application running in your pod by navigating to http://<node-ip>:<node-port> in your browser. Replace <node-ip> with the IP address of any of your 
+# cluster nodes and <node-port> with the NodePort you obtained in the previous step.
+
+# If you're running Kubernetes on a cloud provider, you might prefer using a LoadBalancer service type, which will provide an external IP address. Alternatively, for more complex routing, you can set up an Ingress resource.
+# Remember that exposing a pod directly might not be the best practice for production environments. It's usually better to expose a deployment or a set of pods using a service to ensure high availability and load balancing.
 
 # copy file from pod/deployment to local machine
 k cp default/postgresl-deploy:/home/backup/db ./Desktop/mydb1.dmp
@@ -694,6 +717,11 @@ k auth can-i create deployments --as dev-user
 k auth can-i delete nodes --as dev-user
 k auth can-i create pods --as dev-user --namespace test
 
+# This command will output yes or no to indicate whether the action is allowed.
+kubectl auth can-i list deployments --as system:serviceaccount:$NAMESPACE:$SERVICE_ACCOUNT_NAME
+# The if statement should compare the output of the kubectl auth can-i command to the string yes, not the exit status ($?). The exit status of kubectl auth can-i is always 0
+# unless there's an error in executing the command itself.
+
 # you can add remove objects to role via editing in command line, without any errors
 
 k get clusterRole
@@ -777,6 +805,13 @@ k logs GRANFA_POD_NAME -c grafana
 # port forward so we can access it from outside cluster
 # user/pass for grafana login can be found on the helm charts github page
 k port-forward deploy prometheus-grafana 80:3000
+
+# If you're thinking of a way to quickly access a pod for testing or development purposes without setting up a service, you might be referring to using kubectl port-forward.
+# This command allows you to forward a port from your local machine to a port on a pod. Here's how you can do it:
+kubectl port-forward pod/<pod-name> <local-port>:<pod-port>
+# Once the port forwarding is set up, you can access the application by navigating to http://localhost:<local-port> in your browser.
+# This method is particularly useful for development and debugging purposes, as it allows you to access a pod directly without modifying your cluster's network configuration.
+# However, it's not suitable for production use, as it only works while the kubectl port-forward command is running and is limited to your local machine.
 
 ##### Nodes and Cluster Configurations #####
 
