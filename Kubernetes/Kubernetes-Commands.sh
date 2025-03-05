@@ -66,6 +66,9 @@ git clone https://github.com/kodekloudhub/kubernetes-metrics-server.git
 cd kubernetes-metrics-server/
 kubectl create -f .
 
+# find what ip address the kubernetes master is running at
+kubectl cluster-info 
+
 # In Kubernetes versions : X.Y.Z  1.2.2
 # Where X=1 stands for major, Y=2 stands for minor and Z=2 stands for patch version.
 
@@ -174,6 +177,12 @@ k logs busybox  # the downloaded html from nginx deployments should be visible
 
 # get how many lines we have in the logs combined for all the pods that have the tag "app=prod"
 k logs -n ca2 -l app=prod | wc -l  > /home/ubuntu/res.txt 
+
+# Enabling debug logs is done by appending --verbosity=debug to the command of the main container in the deployment k8s yaml:
+kubectl edit deployment vt-ledger-balances-processor
+# add "- --verbosity=debug" under "spec.template.spec.containers[0].command"
+# Then rollout restart the deployment: 
+kubectl rollout restart deployment vt-ledger-balances-processor
 
 # show details of a running pod
 k describe pod PodName
