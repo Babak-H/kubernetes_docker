@@ -1,0 +1,64 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: "core-vt-webhooks.dyn.mycorps.com"
+  labels:
+    {{- with .Values }}
+    {{- include "ics-labels.labels" . | nindent 4 }}
+    {{- end}}
+webhooks:
+  - name: "a-tls-cert-annotation.dyn.mycorps.com"
+    rules:
+      - apiGroups: [ "*" ]
+        apiVersions: [ "*" ]
+        operations: [ "CREATE", "UPDATE" ]
+        resources: [ "deployments", "jobs", "statefulsets" ]
+    namespaceSelector:
+      matchLabels:
+        core-vt-webhooks-tls: enabled
+    clientConfig:
+      service:
+        name: core-vt-webhooks
+        namespace: 1050-core-vt-webhooks
+        port: 8080
+        path: /api/v1/tls-cert-annotation
+    admissionReviewVersions: [ "v1" ]
+    timeoutSeconds: 30
+    sideEffects: NoneOnDryRun
+  - name: "resource-limit.dyn.mycorps.com"
+    rules:
+      - apiGroups: [ "*" ]
+        apiVersions: [ "*" ]
+        operations: [ "CREATE","UPDATE" ]
+        resources: [ "pods" ]
+    namespaceSelector:
+      matchLabels:
+        core-vt-webhooks-resource-limit: enabled
+    clientConfig:
+      service:
+        name: core-vt-webhooks
+        namespace: 1050-core-vt-webhooks
+        port: 8080
+        path: /api/v1/resource-limit
+    admissionReviewVersions: [ "v1" ]
+    timeoutSeconds: 30
+    sideEffects: NoneOnDryRun
+  - name: "vt-addr.dyn.mycorps.com"
+    rules:
+      - apiGroups: [ "*" ]
+        apiVersions: [ "*" ]
+        operations: [ "CREATE","UPDATE" ]
+        resources: [ "pods" ]
+    namespaceSelector:
+      matchLabels:
+        core-hault-addr: enabled
+    clientConfig:
+      service:
+        name: core-vt-webhooks
+        namespace: 1050-core-vt-webhooks
+        port: 8080
+        path: /api/v1/vault-addr
+    admissionReviewVersions: [ "v1" ]
+    timeoutSeconds: 30
+    sideEffects: NoneOnDryRun
+  
