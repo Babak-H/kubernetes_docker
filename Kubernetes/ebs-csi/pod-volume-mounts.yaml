@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: example-pod
+  namespace: monitoring
+spec:
+  containers:
+    - name: example-container
+      args:
+        - '--bearer-token-file=/mnt/secrets-store/bearer-token'
+      volumeMounts:
+        - name: secrets-store-inline
+          mountPath: "/var/run/secrets/kubernetes"
+          readOnly: true
+  volumes:
+    - name: secrets-store-inline
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          # comes from the resource we declared before in secret-provider-class-file
+          secretProviderClass: "aws-secret-bearer-token"

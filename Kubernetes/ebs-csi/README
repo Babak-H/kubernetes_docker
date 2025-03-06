@@ -1,0 +1,4 @@
+The SecretProviderClass defines how to retrieve the secret from AWS Secrets Manager.
+The Pod specification mounts the secret in a CSI volume.
+The Vault policy grants read access to /sys/metrics.
+The IAM policy allows retrieval of secrets from AWS Secrets Manager.
