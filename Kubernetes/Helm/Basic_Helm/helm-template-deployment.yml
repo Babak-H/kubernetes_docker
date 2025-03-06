@@ -50,3 +50,12 @@ Comment: >
       --set environment.SENDGRID_APIKEY=myKey \
       --set environment.DEFAULT_FROM_ADDRESS="my@email.com" \
       --set environment.DEFAULT_FROM_NAME="Lucas Santos"
+
+
+# required function: This function in Helm ensures that a required value is provided in the Helm values file (values.yaml). If the specified value is missing or empty, Helm will throw an error with a message.
+# $_ :=: This assigns the result of the required function to a throwaway variable ($_), which means the value is not actually used but is still validated
+# .Values.environment & .Values.image.tag: These are placeholders for values that should be defined in the values.yaml file
+{{- $_ := required ".Values.environment" .Values.environment }}
+{{- $_ := required ".Values.image.tag" .Values.image.tag }}
+
+# This approach enforces that essential values (environment and image.tag) are always defined in the values.yaml file before deploying a Helm chart. It helps prevent misconfigurations
