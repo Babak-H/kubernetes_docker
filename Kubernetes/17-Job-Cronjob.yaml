@@ -199,3 +199,120 @@ spec:
             - command: ["/bin/sh", "-c", "date; echo Hello from the Kubernetes cluster"]
               image: busybox
               name: busybox
+
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+  {{- if .Values.pcaCertEnabled }}
+    dyn.certificate.tls/active: "false"
+    dyn.certificate.cdb/active: "false"
+    pca.icv.tls/active: "true"
+  {{ else }}
+    dyn.certificate.tls/active: "true"
+  {{- end }}
+
+  labels:
+  {{- with .Values }}
+  {{- include "ics-labels.labels" . | nindent 4 }}
+  {{end}}
+spec:
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+        {{- if .Values.pcaCertEnabled }}
+          dyn.certificate.tls/active: "false"
+          dyn.certificate.cdb/active: "false"
+          pca.icv.tls/active: "true"
+      {{ else }}
+        dyn.certificate.tls/active: "true"
+      {{ end }}
+    spec:
+      priorityClassName: platform-critical
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsUser: 1000
+      serviceAccountName: {{ .Values.serviceAccountName }}
+      automountServiceAccountToken: true
+      containers:
+        - name: vt-rds-user-init
+          resources:
+            requests:
+              memory: {{ .Values.memory.request }}
+              cpu: {{ .Values.cpu.request }}
+            limits:
+              memory: {{ .Values.memory.limit }}
+          image: {{ .Values.image.host }}/{{ .Values.image.rdsBootstrapPath }}:{{ .Values.image.rdsBootstrapVersion }}
+          imagePullPolicy: "IfNotPresent"
+          command: [ "/bin/bash" ]
+          args:
+            # Avoid "ecx" here, as that will expose secret data to logs.
+            - "-ec"
+            - >-
+              export HOME=/tmp;
+              cd tmp;
+              mkdir .aws;
+              VT_DB_DATA=`aws rds describe-db-clusters --region {{ .Values.region }} --db-cluster-identifier db-1050--{{ .Values.environment }}-tnn-core-vt-cluster | jq -r '.DBClusters[0]'`;
+              DB_AUTH_SECRET=`echo $VT_DB_DATA | jq -r '.MasterUserSecret.SecretArn'`;
+              export DB_HOST=`echo $VT_DB_DATA | jq -r '.Endpoint'`;
+              export DB_PORT=`echo $VT_DB_DATA | jq -r '.Port'`;
+              AUTH_INFO=`aws secretsmanager get-secret-value --region {{ .Values.region }} --secret-id $DB_AUTH_SECRET | jq -r '.SecretString'`;
+              export DB_USERNAME=`echo $AUTH_INFO | jq -r '.username'`;
+              export PGPASSWORD=`echo $AUTH_INFO | jq -r '.password'`;
+              export DB_NEWPASS=`uuidgen`;
+              isUserExist=`psql -X -A -h $DB_HOST -U $DB_USERNAME -t -c "SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='vt_admin';"`;
+              if [[ $isUserExist == 1 ]]; then
+                  echo "User already exists. Altering the password for the user";
+                  psql -h $DB_HOST -U $DB_USERNAME -c "ALTER USER vt_admin WITH PASSWORD '$DB_NEWPASS';";
+              else
+                  echo "Creating user and granting rds superuser priveleges";
+                  psql -h $DB_HOST -U $DB_USERNAME -c "CREATE USER vt_admin WITH PASSWORD '$DB_NEWPASS' CREATEDB CREATEROLE;";
+                  psql -h $DB_HOST -U $DB_USERNAME -c "GRANT rds_superuser TO vt_admin;";
+              fi;
+              isDBExist=`psql -X -A -h $DB_HOST -U $DB_USERNAME -t -c "SELECT 1 FROM pg_catalog.pg_database WHERE datname='vt_admin';"`;
+              if [[ $isDBExist != 1 ]]; then
+                echo "Creating database";
+                psql -h $DB_HOST -U $DB_USERNAME -c "CREATE DATABASE vt_admin;";
+              else
+                echo "Database already exists. Skipping the database creation";
+              fi;
+              if [[ "$USE_BLUE_GREEN" == "true" ]]; then 
+                export TARGET_ENDPOINT="blue-green.vt-aurora.dyn.{{ .Values.env_code }}.eu-west-2.aws.mycorps.net";
+              else
+                export TARGET_ENDPOINT=$DB_HOST;
+              fi;
+              echo "Storing the database credentials in vault";
+              export K8T=`cat /var/run/secrets/kubernetes.io/serviceaccount/token`;
+              export JSON_SECRET="{\""$TARGET_ENDPOINT"\":\""$DB_NEWPASS"\"}";
+              export VTOKEN=`curl -k -s --request POST --data '{"jwt": "'$K8T'", "role": "vt-operator-role"}' https://ht.1050-core-vt.svc.cluster.local:8200/v1/auth/kubernetes/login | jq -r '.auth.client_token'`;
+
+              curl -k -s -X POST -H "X-vt-Token:$VTOKEN" -d "$JSON_SECRET" https://ht.1050-core-vt.svc.cluster.local/v1/secret/dev/root-db-secrets;
+
+              exit 0;
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - "sleep 10"
+          env:
+            - name: AWS_REGION
+              value: {{ .Values.region }}
+            - name: AWS_DEFAULT_REGION
+              value: {{ .Values.region }}
+            - name: AWS_STS_REGIONAL_ENDPOINTS
+              value: "regional"
+            - name: NAMESPACE
+              value: {{ .Values.namespace }}
+            - name: USE_BLUE_GREEN
+              value: {{ .Values.use_blue_green | quote }}
+      restartPolicy: Never
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600
