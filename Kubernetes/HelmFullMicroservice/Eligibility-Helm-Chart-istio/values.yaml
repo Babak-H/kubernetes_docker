@@ -1,0 +1,137 @@
+service:
+  name: burrow-eligibility-service
+  namespace: 1050-burrow
+  category: S1
+  sealId: "1050"
+  tribe: burrow
+  squad: BW_LON16A_burrowMoney_Origination
+  manager: helm
+
+image:
+  repository: dockerdev.artifactory.dyn.prd.aws.mycorps.net/dyn-services
+  tag: <+serviceVariables.chartVersion>
+
+resources:
+  maxUnavailable: 1
+  replicas: 1
+  requests:
+    cpu: "500m"
+    memory: "1.5Gi"
+  limits:
+    memory: "1.5Gi"
+
+jvm:
+  maxHeapSize: "512m"
+  minHeapSize: "512m"
+  options: "-XX:+UseG1GC"
+
+deployment:
+  maxSurge: 100%
+
+runAsNonRoot: true
+fsGroup: 999
+terminationDrainDuration: 10s
+
+test:
+  allowed: false
+
+env:
+  - name: BOOTSTRAP_SERVERS
+    value: "core-kafka.1050-kafka.svc.cluster.local:9092"
+  - name: SCHEMA_REGISTRY_URL
+    value: "https://core-schema-registry.1050-kafka.svc.cluster.local:8081"
+  - name: SPRING_DATASOURCE_URL
+    value: "jdbc:postgresql://cockroach-public:26257/burrow_eligibility_service?\
+            ApplicationName=burrow-eligibility-service&\
+            tcpKeepAlive=true&\
+            sslmode=verify-full&\
+            sslrootcert=/certs/ca.crt&\
+            sslcert=/certs/tls.crt&\
+            sslkey=/certs/key.der&\
+            gssEncMode=disable"
+  - name: SPRING_DATASOURCE_USERNAME
+    value: "burrow_eligibility_service"
+  - name: SPRING_ZIPKIN_BASEURL
+    value: "http://jaeger.1050-core-eng-platform.svc.cluster.local/"
+  - name: SPRING_TASK_SCHEDULING_POOL_SIZE
+    value: "{{ .Values.task.scheduling.pool.size }}"
+  - name: KAFKA_LISTENERS_CONCURRENCY
+    value: "{{ .Values.kafka.listeners.concurrency }}"
+  - name: KAFKA_LISTENERS_AUTO_OFFSET_RESET
+    value: "{{ .Values.kafka.listeners.autoOffsetReset }}"
+  - name: KAFKA_LISTENERS_GROUP_ID
+    value: "{{ .Values.kafka.listeners.groupId }}"
+  - name: MAX_DB_RETRY
+
+kafka:
+  listeners:
+    concurrency: 1
+    autoOffsetReset: earliest
+    groupId: burrow-eligibility-service
+    creditcard:
+      eligibility:
+        concurrency: 1
+      applicationRequest:
+        concurrency: 1
+    loan:
+      eligibility:
+        concurrency: 1
+      application:
+        concurrency: 1
+  recovery:
+    partitions: 3
+  triage:
+    partitions: 3
+  retry:
+    main:
+      maxAttemptsCount: 1
+      backoffInterval: 500ms
+    recovery:
+      maxAttemptsCount: 3
+      backoffInterval: 500ms
+
+
+istio:
+  excludeOutboundPorts: 26257,8133
+
+logging:
+  level:
+    temporal: INFO
+
+encryption:
+  incomeExpenseFields:
+    enabled: true
+    kmsKey: "arn:aws:kms:eu-west-1:******:key/db2dbb13-****-4a31-****-*******"
+  cache:
+    # refresh cache every 10 mins
+    refreshIntervalMillis: 600000
+    # initial delay in ms after application start up - 0 secs(default)
+    initialDelayMillis: 0
+
+zipkin:
+  enabled: true
+
+kafkaacl:
+  enabled: true
+
+db:
+  maxretry: 3
+  retryInterval: 10ms
+
+api:
+  maxretry: 3
+  retryInterval: 100ms
+
+task:
+  scheduling:
+    pool:
+      size: 5
+
+warmup:
+  enabled: true
+
+loan:
+  enabled: true
+
+jwt:
+  icsJwkEnabled: false

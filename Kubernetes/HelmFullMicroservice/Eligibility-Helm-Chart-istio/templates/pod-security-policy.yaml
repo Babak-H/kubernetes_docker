@@ -1,0 +1,30 @@
+# defines security rules for pods running in your cluster
+#TODO: is going to be deprecated, You should consider migrating to PodSecurity Admission
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: zookeeper-kafka-psp
+spec:
+  allowPrivilegeEscalation: false
+  # Grants specific capabilities (CHOWN, FOWNER, DAC_OVERRIDE) to containers
+  allowedCapabilities:
+    - CHOWN
+    - FOWNER
+    - DAC_OVERRIDE
+  fsGroup:
+    # RunAsAny: Allows any fsGroup ID to be assigned
+    rule: RunAsAny
+  hostPorts:
+    # Allows containers to use any port between 0 and 65535.
+    - max: 65535
+      min: 0
+  runAsUser:
+    rule: RunAsAny
+  seLinux:
+    rule: RunAsAny
+  # Allows any group ID for supplemental groups.
+  supplementalGroups:
+    rule: RunAsAny
+  # '*': Grants access to all volume types
+  volumes:
+    - '*'

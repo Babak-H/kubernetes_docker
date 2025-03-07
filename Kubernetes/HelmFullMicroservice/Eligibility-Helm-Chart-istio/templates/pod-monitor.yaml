@@ -1,0 +1,27 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: "{{ .Values.service.name }}"
+  namespace: "{{ .Values.service.namespace }}"
+  labels:
+    {{- with .Values }}
+      {{- include "ics-labels.labels" . | nindent 4 }}
+    {{end}}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io.name: "{{ .Values.service.name }}"
+  # a Prometheus PodMonitor in a Kubernetes environment, used for scraping metrics from pods
+  podMetricsEndpoints:
+    - port: http-actuator
+      # Defines the HTTP endpoint where metrics are exposed, used in Spring Boot applications, where the /actuator/prometheus path provides Prometheus-compatible metrics.
+      path: /actuator/prometheus
+      # Relabeling is used to modify labels attached to scraped metrics before storing them in Prometheus.
+      # Each relabeling rule extracts metadata labels from Kubernetes and maps them to Prometheus labels.
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_app_kubernetes_io_version]
+          targetLabel: version
+        - sourceLabels: [__meta_kubernetes_pod_label_dynamo_jpmchase_com_deployment_id]
+          targetLabel: deployment_id
+        - sourceLabels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          targetLabel: service

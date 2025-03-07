@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vault
+  namespace: 1050-core-vault
+  labels:
+  {{- with .Values }}
+  {{- include "ics-labels.labels" . | nindent 4 }}
+  {{end}}
+spec:
+  endpoints:
+  - path: /v1/sys/metrics
+    port: api-port
+    scheme: https
+    tlsConfig:
+      insecureSkipVerify: true
+  selector:
+    matchLabels:
+      global_service: "true"

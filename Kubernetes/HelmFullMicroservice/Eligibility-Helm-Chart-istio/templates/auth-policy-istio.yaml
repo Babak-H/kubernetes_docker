@@ -1,0 +1,78 @@
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ .Values.service.name }}
+  namespace: {{ .Values.service.namespace }}
+  labels:
+    {{- with .Values }}
+      {{- include "ics-labels.labels" . | nindent 4 }}
+    {{end}}
+spec:
+  action: ALLOW
+  rules:
+    - to:
+        - operation:
+            paths:
+              - "/actuator/info"
+              - "/actuator/health*"
+              - "/actuator/prometheus"
+            ports:
+              - "9090"
+        {{- if .Values.istio.allowed }}
+        {{ tpl (toYaml .Values.istio.allowed) . | nindent 8 }}
+        {{- end }}
+    - from:
+        - source:
+            requestPrincipals:
+              - dyn-api-gateway.mycorps.com/*
+              - tenx-platform.com/*
+      to:
+        - operation:
+            methods: [ "GET" ]
+            paths: [ "/api/v1/borrow/eligibility/*" ]
+            ports:
+              - "8080"
+    - from:
+        - source:
+            principals: [ "cluster.local/ns/1050-orchestration-onboarding/sa/orchestration-onboarding" ]
+      to:
+        - operation:
+            methods: [ "POST" ]
+            paths: [ "/api/v1/borrow/eligibility/create-account" ]
+            ports:
+              - "8080"
+    - from:
+        - source:
+            principals: [ "cluster.local/ns/1050-orchestration-onboarding/sa/orchestration-onboarding" ]
+      to:
+        - operation:
+            methods: [ "PATCH" ]
+            paths: [ "/api/v1/borrow/eligibility/*" ]
+            ports:
+              - "8080"
+    {{- if .Values.test.allowed }}
+    - from:
+        - source:
+            principals: [ "cluster.local/ns/1050-borrow/sa/borrow-test-proxy-service" ]
+      to:
+        - operation:
+            methods: [ "POST" ]
+            paths: [ "/api/v1/borrow/eligibility/create-account" ]
+            ports:
+              - "8080"
+    {{- end }}
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/1050-customer-graph/sa/graph-gateway-service
+      to:
+        - operation:
+            methods:
+              - "POST"
+              - "GET"
+            paths:
+              - "/graphql*"
+            ports: [ '8080' ]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.service.name }}

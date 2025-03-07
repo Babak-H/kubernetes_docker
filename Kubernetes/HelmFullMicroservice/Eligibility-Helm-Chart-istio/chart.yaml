@@ -1,0 +1,8 @@
+apiVersion: v2
+description: A Helm chart for borrow-eligibility-service
+name: burrow-eligibility-service
+dependencies:
+  - name: ics-labels
+    version: ~0.2.0
+    repository: https://artifactory.dyn.prd.aws.mycorps.net/artifactory/helmdev
+version: 1.0.0

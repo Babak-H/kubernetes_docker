@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.service.name }}
+  namespace: {{ .Values.service.namespace }}
+  annotations:
+    dyn.certificate.tls/active: "false"
+    pca.icb.tls/active: "true"
+  labels:
+    {{- with .Values }}
+      {{- include "ics-labels.labels" . | nindent 4 }}
+    {{end}}
+spec:
+  replicas: {{ .Values.resources.replicas }}
+  progressDeadlineSeconds: 540
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: {{ .Values.deployment.maxSurge }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.service.name }}
+  template:
+    metadata:
+      labels:
+      {{- with .Values }}
+        {{- include "ics-labels.labels" . | nindent 8 }}
+      {{end}}
+      annotations:
+        proxy.istio.io/config: '{"holdApplicationUntilProxyStarts":true,"terminationDrainDuration":"{{ .Values.terminationDrainDuration }}"}'
+        {{- if .Values.istio.excludeOutboundPorts }}
+        traffic.sidecar.istio.io/excludeOutboundPorts: {{ .Values.istio.excludeOutboundPorts | quote }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ .Values.service.name }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: {{ .Values.service.name }}
+              topologyKey: kubernetes.io/hostname
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: service
+          image: "{{ .Values.image.repository }}/{{ .Values.service.name }}:{{ .Values.image.tag }}"
+          imagePullPolicy: Always
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: http-actuator
+              containerPort: 9090
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "{{ .Values.resources.requests.cpu }}"
+              memory: "{{ .Values.resources.requests.memory }}"
+            limits:
+              memory: "{{ .Values.resources.limits.memory }}"
+          env:
+            - name: MANAGEMENT_SERVER_PORT
+              value: "9090"
+            - name: SERVER_PORT
+              value: "8080"
+            - name: AWS_REGION
+              value: eu-west-2
+            - name: AWS_STS_REGIONAL_ENDPOINTS
+              value: REGIONAL
+          {{- if .Values.env }}
+          {{ tpl (toYaml .Values.env) . | nindent 12}}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 9090
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 6
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 9090
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 6
+            timeoutSeconds: 10
+      # ensure an even distribution of pods across different topology domains, such as zones or nodes.
+      # This is a Kubernetes feature that ensures pods are evenly spread across a specified topology
+      topologySpreadConstraints:
+          # Defines the maximum allowed imbalance between the number of pods in different topology domains.
+          # A value of 1 means that the difference between the domain with the most pods and the domain with the least pods cannot exceed 1.
+        - maxSkew: 1
+          # Specifies the key that defines the topology domain. In this case, it refers to Kubernetes zones.
+          # This ensures that pods are evenly distributed across different availability zones
+          topologyKey: "topology.kubernetes.io/zone"
+          # Defines what should happen if the constraint cannot be satisfied.
+          # DoNotSchedule: Prevents new pods from being scheduled if doing so would break the constraint.
+          whenUnsatisfiable: DoNotSchedule
+          # Filters which pods are considered for balancing, Only pods matching the label selector are counted when enforcing the constraint.
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .Values.service.name }}

@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: "{{ .Values.service.name }}"
+  namespace: "{{ .Values.service.namespace }}"
+  labels:
+    {{- with .Values }}
+      {{- include "ics-labels.labels" . | nindent 4 }}
+    {{end}}
+    component: ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    # When set to "false", HTTP requests are NOT automatically redirected to HTTPS.
+    # By default, NGINX Ingress forces HTTP to HTTPS redirection if TLS is enabled on the Ingress.
+    # This annotation disables that automatic redirection, allowing HTTP traffic to remain HTTP
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    # It modifies how NGINX routes traffic to backend services
+    # it tells the NGINX Ingress Controller to proxy requests directly to the service’s ClusterIP, rather than resolving individual pod IPs
+    # Normally, NGINX retrieves the list of all pod IPs for a service and load-balances between them
+    # With service-upstream: "true", NGINX will instead forward traffic to the Kubernetes Service (ClusterIP), allowing Kube-proxy (or CNI-based routing) to handle the load balancing.
+    nginx.ingress.kubernetes.io/service-upstream: "true"
+    # When set to "false", SSL passthrough is disabled.
+    # This means that NGINX will terminate SSL/TLS connections and handle decryption before forwarding traffic to backend services.
+    # It allows NGINX to inspect, route, and modify requests based on Ingress rules
+    nginx.ingress.kubernetes.io/ssl-passthrough: "false"
+    nginx.ingress.kubernetes.io/backend-protocol: HTTP
+    # Istio-related
+    nginx.ingress.kubernetes.io/upstream-vhost: "{{ .Values.service.name }}.{{ .Values.service.namespace }}.svc.cluster.local"
+spec:
+  rules:
+    - host: "{{ .Values.gatewayIngress.host }}"
+      http:
+        paths:
+            # / → a forward slash (/)  OR $ → the end of the string (i.e., nothing after service.name), This ensures that the match works both when there's a trailing slash (/) and when there isn't.
+            # .* → Matches anything (zero or more of any characters)
+          - path: "/{{ .Values.service.name }}(/|$)(.*)"
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: "{{ .Values.service.name }}"
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - "{{ .Values.gatewayIngress.host }}"

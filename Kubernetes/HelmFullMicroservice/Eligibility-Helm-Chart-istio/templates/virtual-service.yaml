@@ -1,0 +1,16 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: "{{ .Values.service.name }}"
+  namespace: "{{ .Values.service.namespace }}"
+  labels:
+    {{- with .Values }}
+      {{- include "ics-labels.labels" . | nindent 4 }}
+    {{end}}
+spec:
+  hosts:
+    - "{{ .Values.service.name }}.{{ .Values.service.namespace }}.svc.cluster.local"
+  http:
+    - route:
+        - destination:
+            host: "{{ .Values.service.name }}.{{ .Values.service.namespace }}.svc.cluster.local"

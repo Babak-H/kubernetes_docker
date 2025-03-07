@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ .Values.service.name }}-pdb
+  namespace: {{ .Values.service.namespace }}
+  labels:
+    {{- with .Values}}
+      {{- include "icb-labels.labels" . | nindent 4 }}
+    {{- end}}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.service.name | quote }}
+  maxUnavailable: {{ .Values.resources.maxUnavailable }}

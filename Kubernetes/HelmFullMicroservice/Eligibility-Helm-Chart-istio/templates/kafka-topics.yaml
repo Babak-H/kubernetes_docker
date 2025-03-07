@@ -1,0 +1,43 @@
+apiVersion: dyn.mycorps.com/v1
+kind: KafkaTopic 
+metadata:
+  namespace: "{{ .Values.service.namespace }}"
+  name: topic-x.burrow.check-eligibility-response-v006
+  labels:
+    {{- with .Values }}
+      {{- include "ics-labels.labels" . | nindent 4 }}
+    {{end}}
+spec:
+  name: topic-x.burrow.check-eligibility-response-v006
+  partitions: {{ .Values.kafka.partitions }}
+  producers:
+    - name: {{ .Values.service.name }}
+  consumers:
+    - name: burrow-perf-test-sentinel-service
+    - name: orchestration-onboarding
+    - name: burrow-test-proxy-service
+
+---
+apiVersion: dyn.mycorps.com/v1
+kind: KafkaTopic
+metadata:
+  namespace: "{{ .Values.service.namespace }}"
+  name: topic-x.burrow.check-eligibility-request-v009
+  labels:
+    {{- with .Values }}
+      {{- include "ics-labels.labels" . | nindent 4 }}
+    {{end}}
+spec:
+  name: topic-x.burrow.check-eligibility-request-v009
+  partitions: {{ .Values.kafka.partitions }}
+  producers:
+    - name: burrow-perf-test-sentinel-service
+    - name: orchestration-onboarding
+    - name: burrow-test-proxy-service
+    - name: burrow-outbox-service
+  consumers:
+    - name: {{ .Values.service.name }}
+    - name: dna-kafka-connect-topic-x
+      consumerGroupPrefix: connect-topic-x-
+    - name: stream-iceberg-ingester 
+      consumerGroupPrefix: stream-iceberg-topic-x-

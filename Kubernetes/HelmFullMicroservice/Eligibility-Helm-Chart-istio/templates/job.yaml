@@ -1,0 +1,86 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.service.name }}-job-{{ randAlphaNum 4 | lower }} 
+  namespace: {{ .Values.namespace.operators }}
+  annotations:
+  {{- if .Values.pcaCertEnabled }}
+    pca.ics.tls/active: "true"
+    dyn.certificate.tls/active: "false"
+    dyn.certificate.cdb/active: "false"
+  {{ else }}
+    dyn.certificate.tls/active: "true"
+  {{ end }}
+  labels:
+    {{- with .Values }}
+      {{- include "ics-labels.labels" . | nindent 4 }}
+    {{ end }}
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 0
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      priorityClassName: platform-critical
+      restartPolicy: Never
+      securityContext:
+        fsGroup: 999
+        runAsGroup: 999
+        runAsUser: 999
+      serviceAccountName: {{ .Values.prerequisitesDeploymentServiceAccount.name }}
+      automountServiceAccountToken: true
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
+      containers:
+        - name: vault-init
+          resources:
+            requests:
+              memory: {{ .Values.memory.request }}
+              cpu: {{ .Values.cpu.request }}
+            limits:
+              memory: {{ .Values.memory.limit }}
+          image: {{ .Values.image.host }}/dyn-services/ics-ledgers-vault-tool:{{ .Values.vaultToolsImageTag }}
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp-volume
+          command: [ "/bin/bash" ]
+          args:
+            - "-ecx"
+            - |
+
+              # Mount kubeconfig
+              mkdir ~/.kube;
+              bash /scripts/build-kubeconfig.sh ~/.kube/config;
+              kubectl config get-contexts;
+              
+              # Downloading the required artifacts and vaultctl binary
+              mkdir -p /tmp/operator/generated-resources/operator-prerequisites && cd /tmp/tm-operator;
+              cp /release-artifacts/vtctl .;
+              cp /release-artifacts/vault-{{ .Values.vaultVersion }}.release .;
+              chmod 700 vtctl;
+              {{ if eq .Values.dumpResourcesToBeInstalled "true" }}
+              sleep 7200
+              {{ end }}
+
+          env:
+            - name: CLOUD_PROVIDER
+              value: AWS
+            - name: AWS_STS_REGIONAL_ENDPOINTS
+              value: "regional"
+            - name: AWS_REGION
+              value: {{ .Values.region }}
+            - name: AWS_DEFAULT_REGION
+              value: {{ .Values.region }}
+            - name: OPERATORS_NAMESPACE
+              value: {{ .Values.namespace.operators }}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - "sleep 10"    

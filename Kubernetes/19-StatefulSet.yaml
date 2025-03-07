@@ -99,3 +99,200 @@ spec:
     app: kafka
   ports:
   - port: 9092
+
+
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  annotations:
+    dyn.certificate.tls/active: "false"
+    policies.kyverno.io/last-applied-patches: |
+      autogen-add-drop-all-capabilities.add-drop-all-capabilities.kyverno.io: added /spec/template/spec/initContainers/0/securityContext/capabilities
+  labels:
+    app: prometheus
+    app.kubernetes.io/part-of: namespaced-observability
+    managed-by: prometheus-operator
+    project: monitoring
+  name: prometheus-postgres
+  namespace: 1050-core-vt
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/managed-by: prometheus-operator
+      app.kubernetes.io/name: prometheus
+      prometheus: postgres
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: prometheus
+        sidecar.istio.io/inject: "false"
+      labels:
+        app: prometheus
+        app.kubernetes.io/instance: postgres
+        app.kubernetes.io/managed-by: prometheus-operator
+        project: monitoring
+        prometheus: postgres
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - preference:
+              matchExpressions:
+              - key: tchin.io/node
+                operator: In
+                values:
+                - monitoring
+            weight: 80
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: prometheus
+                operator: In
+                values:
+                - postgres
+              - key: app
+                operator: In
+                values:
+                - prometheus
+            topologyKey: failure-domain.beta.kubernetes.io/zone
+      automountServiceAccountToken: true
+      containers:
+      - args:
+        - --web.console.templates=/etc/prometheus/consoles
+        - --web.console.libraries=/etc/prometheus/console_libraries
+        - --config.file=/etc/prometheus/config_out/prometheus.env.yaml
+        - --web.enable-lifecycle
+        - --web.config.file=/etc/prometheus/web_config/web-config.yaml
+        image: dockerdev.artifactory.dyn.prd.aws.mycorps.net/container-external/docker.external.tmachin.io/third_party/quay.io/prometheus/prometheus:4.7.11
+        imagePullPolicy: IfNotPresent
+        name: prometheus
+        livenessProbe:
+          failureThreshold: 6
+          httpGet:
+            path: /healthy
+            port: web
+            scheme: HTTP
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+        ports:
+        - containerPort: 9090
+          name: web
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /ready
+            port: web
+            scheme: HTTP
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+        resources:
+          limits:
+            cpu: 1800m
+            memory: 3Gi
+          requests:
+            cpu: 300m
+            memory: 1536Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        startupProbe:
+          failureThreshold: 60
+          httpGet:
+            path: /ready
+            port: web
+            scheme: HTTP
+          periodSeconds: 15
+          successThreshold: 1
+          timeoutSeconds: 3
+        volumeMounts:
+        - mountPath: /etc/prometheus/config_out
+          name: config-out
+          readOnly: true
+        - mountPath: /etc/prometheus/certs
+          name: tls-assets
+          readOnly: true
+        - mountPath: /prometheus
+          name: prometheus-postgres-db
+          subPath: prometheus-db
+        - mountPath: /etc/prometheus/rules/prometheus-postgres-rulefiles-0
+          name: prometheus-postgres-rulefiles-0
+        - mountPath: /etc/prometheus/web_config/web-config.yaml
+          name: web-config
+          readOnly: true
+          subPath: web-config.yaml
+
+      # sidecar container    
+      - args:
+        - --listen-address=:8080
+        - --reload-url=http://localhost:9090/-/reload
+        - --config-file=/etc/prometheus/config/prometheus.yaml.gz
+        - --config-envsubst-file=/etc/prometheus/config_out/prometheus.env.yaml
+        - --watched-dir=/etc/prometheus/rules/prometheus-postgres-rulefiles-0
+        name: config-reloader
+        command:
+        - /bin/prometheus-config-reloader
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        image: dockerdev.artifactory.dyn.prd.aws.mycorps.net/container-external/docker.external.tmchin.io/third_party/quay.io/prometheus-operator/prometheus-config-reloader:4.7.11
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: reloader-web
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 10m
+            memory: 50Mi
+          requests:
+            cpu: 10m
+            memory: 50Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /etc/prometheus/config
+          name: config
+        - mountPath: /etc/prometheus/config_out
+          name: config-out
+        - mountPath: /etc/prometheus/rules/prometheus-postgres-rulefiles-0
+          name: prometheus-postgres-rulefiles-0
+      - args:
+        - sidecar
+        - --prometheus.url=http://localhost:9090/
+        - --grpc-address=:10901
+        - --http-address=:10902
+        - '--prometheus.http-client={"tls_config": {"insecure_skip_verify":true}}'
+        name: thanos-sidecar
+        image: dockerdev.artifactory.dyn.prd.aws.mycorps.net/container-external/docker.external.tmachin.io/third_party/quay.io/thanos/thanos:4.7.11
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 10902
+          name: http
+          protocol: TCP
+        - containerPort: 10901
+          name: grpc
+          protocol: TCP
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true

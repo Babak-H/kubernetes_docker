@@ -1,0 +1,36 @@
+{{- if .Values.vaultMinimalReplicaSetupForDeploymentsWithPDB.enabled }}
+apiVersion: kyverno.io/v1
+#  A ClusterPolicy in Kyverno is a policy that applies across the entire Kubernetes cluster, unlike a Policy, which applies only to a specific namespace
+kind: ClusterPolicy
+metadata:
+  name: minimal-deployments-replica-amendments
+  namespace: "{{ .Values.namespace.operators }}"
+spec:
+  rules:
+    {{- $index := 0 }}
+    {{- range $key, $value := .Values.vaultMinimalReplicaSetupForDeploymentsWithPDB.definitions }}
+    {{- $splitedLocation := split "/" $key  }}
+    {{- $namespace := $splitedLocation._0 }}
+    {{- $deployment := $splitedLocation._1 }}
+    {{- $index = $index | add1 }}
+    - name: rule-{{$index}}
+      match:
+        resources:
+          operations:
+            - CREATE
+          name: {{ $deployment }}
+          namespaces:
+            - {{ $namespace }}
+          kinds:
+            - Deployment
+      preconditions:
+        all:
+          - key: "{{ `{{ request.object.spec.replicas }}` }}"
+            operator: LessThan
+            value: {{ $value }}
+      mutate:
+        patchStrategicMerge:
+          spec:
+            replicas: {{ $value }}
+      {{- end }}
+{{- end }}

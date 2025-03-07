@@ -1,0 +1,19 @@
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: "{{ .Values.service.name }}"
+  namespace: "{{ .Values.service.namespace }}"
+  labels:
+    {{- with .Values }}
+      {{- include "ics-labels.labels" . | nindent 4 }}
+    {{end}}
+spec:
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    "9090":
+      # allow management port to be accessed using plain text (no mTLS)
+      mode: PERMISSIVE
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "{{ .Values.service.name }}"
