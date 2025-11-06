@@ -1,0 +1,31 @@
+# from base image
+FROM ubuntu:12.04
+
+# It adds metadata (labels) to the image
+# Docker labels are key–value pairs stored in the image’s metadata. They don’t affect how the container runs, but they’re useful for documentation, automation, and management.
+LABEL version="1.1.0" \
+      app_name="Training registration application" \
+	release_date="9-Sep-2018"
+
+# install dependencies
+RUN apt-get update && apt-get install -y apache2 && apt-get clean
+
+# set environment variables
+ENV APACHE_RUN_USER=www-data
+ENV APACHE_RUN_GROUP=www-data
+ENV APACHE_LOG_DIR=/var/log/apache2
+
+# this container uses port 80
+EXPOSE 80
+
+# copy data from host machine to the specified folder
+COPY index.html /var/www/html
+
+# start running the container with this command: /usr/sbin/apache2 -D FOREGROUND
+CMD ["/usr/sbin/apache2", "-D", "FOREGROUND"]
+	  
+	  
+
+
+
+

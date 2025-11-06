@@ -1,12 +1,15 @@
 ---
 apiVersion: v1 # current version of the pod
 kind: Pod # kind/type of the resource
+
+# pod metadata, including name and labels
 metadata:
   name: mysql  # name of the pod
   labels:
     # pod labels
     app: mysql
     component: db
+
 # pod specification
 spec:
   containers:

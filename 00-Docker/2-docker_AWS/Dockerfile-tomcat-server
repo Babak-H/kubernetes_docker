@@ -1,0 +1,23 @@
+FROM centos
+
+RUN yum install java -y
+RUN mkdir /opt/tomcat/
+
+# all the operations below this command will start at location "/opt/tomcat"
+WORKDIR /opt/tomcat
+
+# The ADD instruction copies files, directories, or URLs into the Docker image
+# here Downloads the file directly from the given URL and copies it into the image at the path /opt/tomcat
+ADD https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.54/bin/apache-tomcat-9.0.54.tar.gz /opt/tomcat
+
+RUN tar xvfz apache*.tar.gz
+RUN mv apache-tomcat-9.0.54/* /opt/tomcat 
+
+EXPOSE 8080
+
+CMD ["/opt/tomcat/bin/catalina.sh", "run"]
+
+
+# ADD vs COPY
+# ADD can do more than COPY: It can download from a URL, It can automatically extract compressed archives, But in most modern Dockerfiles, COPY is preferred unless you specifically need these extra features
+

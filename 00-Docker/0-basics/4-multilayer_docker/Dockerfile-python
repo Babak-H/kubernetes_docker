@@ -1,0 +1,43 @@
+###################### STAGE 1 ######################
+# set base image 
+# AS build, you can use this name in future stages
+FROM debian:11-slim AS build
+
+# install dependencies via RUN command
+# Creates a Python virtual environment (/venv) and installs build tools
+RUN apt-get update && \
+    apt-get install --no-install-suggests --no-install-recommends --yes python3-venv gcc libpython3-dev && \
+    python3 -m venv /venv && \
+    /venv/bin/pip install --upgrade pip setuptools wheel
+
+###################### STAGE 2 ######################
+
+FROM build AS build-venv
+
+# copy dependencies file to the working directory from host machine
+COPY requirements.txt /requirements.txt
+
+# installs dependencies inside /venv via RUN command
+# This means build-venv inherits everything from build, including /venv
+RUN /venv/bin/pip install --disable-pip-version-check -r /requirements.txt
+
+###################### STAGE 3 ######################
+
+# Final runtime image
+# This is a minimal, production-ready image (based on Distroless) that only includes: 
+  # the /venv directory copied from the previous stage
+  # app’s main.py , no compiler, package manager, or shell
+FROM gcr.io/distroless/python3-debian11
+# copy the /venv from prevoius layer to this layer
+COPY --from=build-venv /venv /venv
+# copy main.py from host machine
+COPY main.py .
+
+# while CMD can be easily overriden in commandline, ENTRYPOINT can be only appended, not overriden
+ENTRYPOINT [ "/venv/bin/python3", "main.py" ]
+
+
+# The first stage (build) only created an empty virtual environment (/venv) — no packages installed
+# The second stage (build-venv) is the one where dependencies (requirements.txt) are installed
+    # => the second stage contains the final, ready-to-use /venv you want in your runtime image.
+# third stage is using a very small docker image only to run the already built image
