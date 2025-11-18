@@ -1,3 +1,5 @@
+# this file contains general information about this chart
+
 apiVersion: v2
 name: dbie-gke
 description: a helm chart for dbie-gke cluster

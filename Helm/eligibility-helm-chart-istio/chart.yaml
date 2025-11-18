@@ -1,0 +1,8 @@
+apiVersion: v2
+description: A Helm chart for burrow-eligibility-service
+name: burrow-eligibility-service
+dependencies:
+  - name: ic-labels
+    version: ~0.2.0
+    repository: https://artifactory.prd.aws.mycorps.net/artifactory/helmdev
+version: 1.0.0

@@ -1,9 +1,12 @@
-appName: kubernetes-cluster
-namespace: my-namespace
+## Metadata:
+appName: schemaregistry
+namespace: dbekfk-schemareg
 appReplicas: 3
 annotations:
  prometheus.io/scrape: "true"
  prometheus.io/port: "5556"
+
+## first container information:
 containerNameFirst: prometheus-jmx-exporter
 appImageFirst: "address-to-docker-image"
 appImageFirstVersion: v1
@@ -16,6 +19,8 @@ firstContainerCommands:
 - '"5556"'
 - /etc/jmx-schema-registry/jmx-schema-registry-prometheus.yml
 firstImagePort: 5556
+
+## Second container information:
 appImageSecond: "address-to-docker-image"
 appImageSecondVersion: v2
 SecondImagePort: 8081
@@ -41,16 +46,20 @@ containerEnvVars:
   value: '"true"'
 - name: SCHEMA_REGISTRY_JMX_OPTS
   value: '"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.local.only=false -Dcom.sun.management.jmxremote.rmi.port=2203"'
+
+## Volumes data:
 volumes:
   - name: jmx-config
     configmapName: schema-registry-jmx-configmap
   - name: schemaregistry-configmap
     configmapName: schema-registry-configmap
 
+## Service data:
 servicePort: 8081
 containerPort: 8081
 serviceType: ClusterIP
 
+## Virtual Service data:
 virtualService:
   name: ""
   gateway: ""
@@ -58,6 +67,7 @@ virtualService:
   destHost: ""
   destHostPort: ""
 
+## Ingress data:
 ingress:
   class: ""
   StaticIpName: ""

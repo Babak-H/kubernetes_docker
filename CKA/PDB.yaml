@@ -1,6 +1,8 @@
-# Pod Disruption Budget
+# Pod Disruption Budget => A PodDisruptionBudget protects your workload from voluntary disruptions by limiting how many pods can be unavailable at the same time
+# Voluntary disruptions include: Node drain (kubectl drain), Cluster autoscaler removing a node, Admin deleting a node, Upgrade operations (K8s version upgrades, OS upgrades)
+# If you have a deployment with multiple replicas, Kubernetes might evict too many pods during maintenance, causing downtime.
+# “Keep at least X pods running” OR You can only take Y pods down at once
 
----
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -22,3 +24,43 @@ spec:
   selector:
     matchLabels:
       app: zookeeper
+
+
+---
+# You have 3 pods: order-service-xxx-1, order-service-xxx-2, order-service-xxx-3, You want to ensure at least 2 are always running.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+    spec:
+      containers:
+        - name: order-service
+          image: myapp:1.0
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: order-service-pdb
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: order-service
+
+# Scenario 1: Node Drain:
+# Kubernetes tries to evict pods. It can evict only 1 pod (because you need minAvailable: 2). Once 1 pod is down, Kubernetes refuses to evict the next one, Result → Zero downtime during maintenance
+
+# mistakes:
+# Setting minAvailable: 2 when replicas = 2 , This blocks draining and upgrades completely.
+# PDB set but replicas = 1 , A PDB is useless with 1 pod — no voluntary disruption is allowed anyway.
+# Wrong labels in selector , If PDB does not match your pods → it does nothing.

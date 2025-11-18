@@ -1,0 +1,24 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: "{{ .Values.service.name }}"
+  namespace: "{{ .Values.service.namespace }}"
+  labels:
+    # with changes the current context (.) to whatever you pass in
+    # Inside this block, . now refers to .Values instead of the parent context
+    {{- with .Values }}
+      # {{-  => The dash (-) removes whitespace/newlines to keep the YAML clean
+      # This calls another Helm template named "ics-labels.labels" and passes the current context (.) into it
+      # So it's equivalent to => include "ics-labels.labels" .Values
+      # | nindent 4 => Take the output of the included template and indent it with 4 spaces, and always start on a new line
+
+      # If .Values exists, temporarily switch into it, call the ics-labels.labels template with .Values as input, indent the result by 4 spaces, and insert it into the YAML
+      {{- include "ics-labels.labels" . | nindent 4 }}
+    {{end}}
+spec:
+  hosts:
+    - "{{ .Values.service.name }}.{{ .Values.service.namespace }}.svc.cluster.local"
+  http:
+    - route:
+        - destination:
+            host: "{{ .Values.service.name }}.{{ .Values.service.namespace }}.svc.cluster.local"

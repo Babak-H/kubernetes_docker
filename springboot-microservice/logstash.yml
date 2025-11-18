@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+  namespace: mddz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logstash
+
+  template:
+    metadata:
+      annotations:
+        # logstash doesn't need a mesh proxy
+        sidecar.istio.io/inject: "false"
+        prometheus.io/scrape: "true"
+        # 5044 is the beats input TCP port, not the monitoring endpoint, Logstash exposes metrics on 9600 by default
+        # 9600/_node/stats ,
+        prometheus.io/port: "9600"
+      labels:
+        app: logstash
+        app.kubernetes.io/name: logstash
+        app.kubernetes.io/instance: logstash
+        app.kubernetes.io/component: logging
+        app.kubernetes.io/part-of: observability
+    spec:
+      terminationGracePeriodSeconds: 90
+      serviceAccountName: logstash-sa
+# on logstash we do NOT need fsGroup, since Logstash doesn’t normally doesnt write to host-mounted volumes
+#      securityContext:
+#        fsGroup: 10001
+      containers:
+      - name: logstash
+        image: docker.elastic.co/logstash/logstash:8.5.1
+        # graceful drain for Logstash => This gives Logstash time to flush events before shutting down
+        # A preStop lifecycle hook is an action that is executed immediately before a container is sent the termination signal (usually SIGTERM) and before the grace period begins
+        lifecycle:
+          preStop:
+            exec:
+              command: [sh", "-c", "sleep 20"]
+        securityContext:
+          runAsUser: 10000
+          runAsGroup: 10001
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+          - name: logstash-conf
+            mountPath: /usr/share/logstash/pipeline/logstash.conf
+            subPath: logstash.conf
+          - name: logstash-yml
+            mountPath: /usr/share/logstash/config/logstash.yml
+            subPath: logstash.yml
+        ports:
+        - containerPort: 9600
+        imagePullPolicy: IfNotPresent
+#        env:
+#        - name: ELASTICSEARCH_HOST
+#          value: "***.**.***.com"
+#        - name: ENVIRONMENT
+#          value: "dev"
+# Set JVM heap size explicitly => Without configuring heap size, Logstash uses default JVM auto-sizing, It can request more memory than the limits which results in OOMKilled
+#          - name: LS_JAVA_OPTS
+#            value: "-Xms512m -Xmx512m"
+        envFrom:
+          - configMapRef:
+              name: logstash-config
+        # Logstash usually requires: Minimum JVM heap: 512Mi, Realistic: 1Gi – 2Gi for light workloads, Even idle JVM requires >300Mi
+        resources:
+          requests:
+            cpu: 200m
+            memory: 1Gi
+          limits:
+            cpu: 500m
+            memory: 2Gi
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 9600
+          initialDelaySeconds: 30
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 9600
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      volumes:
+        - name: logstash-conf
+          configMap: 
+            name: logstash-conf
+        - name: logstash-yml
+          configMap: 
+            name: logstash-yml
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash-service
+  namespace: mddz
+  labels:
+    app: logstash
+    app.kubernetes.io/name: logstash
+    app.kubernetes.io/component: logging
+spec:
+  sessionAffinity: ClientIP
+  type: ClusterIP
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  selector:
+    app: logstash
+  ports:
+    # Beats input port
+    - name: beats
+      port: 5044
+      targetPort: 5044
+      protocol: TCP
+   # monitoring port
+    - name: metrics
+      port: 9600
+      targetPort: 9600
+      protocol: TCP

@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: schema-registry-configmap
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.appName }}
+data:
+  # In YAML the symbols | and |- and |+ control how multiline strings handle line breaks
+  # |+  => Literal block scalar (keep formatting exactly as written) and preserve one or more trailing newlines at the end of the text.
+  schema-registry.jaas: |+
+    SchemaRegistry-Props {
+      org.eclipse.jetty.jaas.spi.PropertyFileLoginModule required
+      file="/etc/schema-registry/config/login.properties"
+      debug="false";
+    };
+  login.properties: |+
+    barney: changeme,user,developer
+
+
+# data:
+#   config: |+
+#     line1
+#     line2
+
+# result :
+# line1
+# line2

@@ -1,0 +1,265 @@
+---
+apiVersion: v1 # current version of the pod
+kind: Pod # kind/type of the resource
+# pod metadata, including name and labels
+metadata:
+  name: mysql  # name of the pod
+  labels:
+    # pod labels
+    # we set labels to pods and then use selectors in Deployments, Services,... to choose them
+    app: mysql
+    component: db
+# pod specification
+spec:
+  # only restart the pod if it fails (do not restart when pod finishes the job and is in completed state)
+  restartPolicy: OnFailure
+  containers:
+    - name: mysql # container name
+      image: mysql:5 # container image
+      ports:
+        # ports exposed on the pod from container (this is for information, no real effect on the pod/deployment itself)
+        - containerPort: 3306
+      # environment variables of the pod
+      env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "password"
+        - name: MYSQL_DATABASE
+          value: "fleet-man"
+      # the command will force the pod to sleep for 4800 seconds after starting
+      command: ["/bin/bash", "sleep 4800"]
+      securityContext:
+        # setting user to 0 , means we run it as user ROOT (just for testing, not good practice)
+        runAsUser: 0 
+        # runAsUser: 1000  => a safer option, run as non-root user
+        # add SYS_TIME and NET_ADMIN
+        capabilities:
+          add: ["SYS_TIME", "NET_ADMIN"]
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sidecar-container-demo
+spec:
+  containers:
+    - image: busybox
+      name: sidecar-container
+      # matches docker's entrypoint concept, and whatever is specified here, is run as the main process of the container
+      # don't specify "command" in pod, if the docker image already has "ENTRYPOINT" 
+      command: ["/bin/sh"]
+      # matches docker's "command" concept, whatever is specified here, is passed as command-line argument to the entrypoint
+      args: ["-c", "while true; do echo $(date -u) 'Hi I am from Sidecar container' >> /var/log/index.html; sleep 5; done"]
+      volumeMounts:
+        # both containers access a shared volume
+        - name: var-logs
+          mountPath: /var/log
+    - image: nginx
+      name: main-container
+      ports:
+        - containerPort: 80
+      volumeMounts:
+        - mountPath: /usr/share/nginx/html
+          name: var-logs
+  volumes:
+    - name: var-logs
+      emptyDir: {}  # this is a local (non-persistent) volume, created inside the pod.
+
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: command-demo
+  labels:
+    purpose: demonstrate-command
+spec:
+  # only restart the pod if it fails (do not restart when pod finishes the job and is in completed state)
+  restartPolicy: OnFailure
+  containers:
+  - name: command-demo-container
+    image: debian
+    command: ["printenv"]
+    args: ["HOSTNAME", "KUBERNETES_PORT"]
+
+# direct command would be => printenv HOSTNAME KUBERNETES_PORT
+# same command but in docker => docker run --rm debian printenv HOSTNAME KUBERNETES_PORT
+
+---
+# access environment variable inside command
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: command-demo-1
+  labels:
+    purpose: demonstrate-command-1
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: command-demo-container-1
+    image: debian
+    env:
+      - name: MESSAGE
+        value: "hello world"
+    command: ["/bin/echo"]
+    args: ["$(MESSAGE)"]
+
+
+# run while loop inside the pod's command
+# command: ["/bin/bash"]
+# args: ["-c", "while true; do echo 'Welcome to JournalDev'; sleep 100; done"]
+
+---
+# pod with NFS type volume without PVC
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+spec:
+  volumes:
+    - name: test-volume
+      nfs:
+        server: my-nfs-server.example.com
+        path: /my-nfs-volume
+        readOnly: true
+  containers:
+  - image: registry.k8s.io/test-webserver
+    name: test-container
+  volumeMounts:
+    - mountPath: /my-nfs-data
+      name: test-volume
+
+
+# sharing storage between kubernetes pods
+# to share volume between multiple pods, create PVC with access mode: ReadWriteMany
+# best type for shared volume is NFS
+
+# when editing a pod on the command-line, only these changes are allowed:
+# container image
+# init container image
+# toleration
+
+# Resource Requessts and Limits (for each container inside a pod)
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+    # each container has its own resources
+    # giving a pod more ram or cpu, does NOT make it run faster
+    # this container would need at least 300mb of memory to run properly
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi 
+      limits:
+        # value can be "1 core" "0.5 core" "0.1 core" or "200m" meaning "200/1000 core"
+        cpu: 200m
+        memory: 512Mi
+
+
+# Create a pod with nginx container exposed on port 80. Add a busybox init container which downloads a page using
+# "wget -O /work-dir/index.html http://neverssl.com/online". Make a volume of type emptyDir and mount it in both containers. For the nginx container, mount it on
+# "/usr/share/nginx/html" and for the init-container, mount it on "/work-dir". When done, get the IP of the created pod
+# k run nginx --image=nginx --port=80 --dry-run=client -o yaml > po.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  volumes:
+    - name: vol
+      emptyDir: {}
+  initContainers:
+    - name: busybox
+      image: busybox
+      volumeMounts:
+        - name: vol
+          mountPath: /work-dir
+      # download file from the http address and save in in /work-dir as html page, later use same page for index at main container
+      command: ["/bin/sh", "-c", "wget -O /work-dir/index.html http://neverssl.com/online"]
+  containers:
+    - image: nginx
+      name: nginx
+      volumeMounts:
+        - mountPath: /usr/share/nginx/html
+          name: vol
+
+
+# pod with for-loop command
+# command: ["/bin/sh", "-c", "for word in 1 2 3 4 5; do echo $word; done"]
+
+---
+# in kubernetes "&labels" in yaml file is an alias that allows you to define a set of values and then reuse them several times in the same file.
+# Anchor &  => define the reusable values
+# Alias *   => refrence the created anchor of labels
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-pod
+  labels: &labels
+    app: my-app
+    tier: frontend
+spec:
+  containers:
+  - name: my-container
+    image: my-image
+  - name: another-container
+    image: another-image
+  labels: *labels
+
+# Create a Pod named multi-container-playground in Namespace default with three containers, named c1, c2 and c3. There should be a volume attached to that Pod and mounted into every container, but the volume shouldn't be persisted or shared with other Pods.
+# Container c1 should be of image nginx:1.17.6-alpine and have the name of the node where its Pod is running available as environment variable MY_NODE_NAME
+# Container c2 should be of image busybox:1.31.1 and write the output of the date command every second in the shared volume into file date.log. You can use while true; do date >> /your/vol/path/date.log; sleep 1; done
+# Container c3 should be of image busybox:1.31.1 and constantly send the content of file date.log from the shared volume to stdout. You can use tail -f /your/vol/path/date.log
+
+# k run multi-container-playground --image=nginx:1.17.6-alpine --dry-run=client -o yaml > 13.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: multi-container-playground
+  name: multi-container-playground
+spec:
+  volumes:
+  - name: vol
+    emptyDir: {}
+  containers:
+  - image: nginx:1.17.6-alpine
+    name: c1
+    env:
+    - name: MY_NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    volumeMounts:
+    - name: vol
+      mountPath: /vol
+  - image: nginx:1.17.6-alpine
+    name: c2
+    command: ["sh", "-c", "while true; do date >> /vol/date.log; sleep 1; done"]
+    volumeMounts:
+    - name: vol
+      mountPath: /vol
+  - image: busybox:1.31.1
+    name: c3
+    command: ["sh", "-c", "tail -f /vol/date.log"]
+    volumeMounts:
+    - name: vol
+      mountPath: /vol
+
+# check the env
+# k exec multi-container-playground -c c1 -- env | grep My
+# k logs multi-container-playground -c c3

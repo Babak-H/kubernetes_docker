@@ -1,0 +1,47 @@
+{{- if .Values.vaultMinimalReplicaSetupForDeploymentsWithPDB.enabled }}
+apiVersion: kyverno.io/v1
+#  A ClusterPolicy in Kyverno is a policy that applies across the entire Kubernetes cluster, unlike a Policy, which applies only to a specific namespace
+kind: ClusterPolicy
+metadata:
+  name: minimal-deployments-replica-amendments
+  namespace: "{{ .Values.namespace.operators }}"
+# This block is generating multiple rules inside a spec.rules: list, based on key/value pairs defined in values.yaml
+spec:
+  rules:
+
+
+    # $index  This variable is used to number each generated rule
+    {{- $index := 0 }}
+    # Loop through a map in values.yaml
+    {{- range $key, $value := .Values.vaultMinimalReplicaSetupForDeploymentsWithPDB.definitions }}
+    # Split the key "namespace/deployment"
+    {{- $splitedLocation := split "/" $key  }}
+    # key "prod/app1" => $namespace = "prod" , $deployment = "app1"
+    {{- $namespace := $splitedLocation._0 }}
+    {{- $deployment := $splitedLocation._1 }}
+    # Increment index
+    {{- $index = $index | add1 }}
+    # So rules become: rule-1 , rule-2 , rule-3,...
+    - name: rule-{{$index}}
+      match:
+        resources:
+          operations:
+            - CREATE
+          name: {{ $deployment }}
+          namespaces:
+            - {{ $namespace }}
+          kinds:
+            - Deployment
+      preconditions:
+        all:
+          - key: "{{ `{{ request.object.spec.replicas }}` }}"
+            operator: LessThan
+            value: {{ $value }}  # "qa/app3": 1 , here value is 1
+      mutate:
+        patchStrategicMerge:
+          spec:
+            replicas: {{ $value }}
+      {{- end }}  # here is end of the loop
+
+
+{{- end }}

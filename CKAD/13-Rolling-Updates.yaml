@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-dep
+spec:
+  replicas: 3
+  # number of previous iterations to keep
+  revisionHistoryLimit: 3
+  # this section is for how updating the pods should happen
+  strategy:
+    # rolling updates or recreate
+    type: RollingUpdate
+    rollingUpdate: # update step-by-step
+      # how many new pods to create when updating
+      maxSurge: 1
+      # how many of the old pods are allowed to be unavailable at once when updating
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: hello-dep
+  template:
+    metadata:
+      labels:
+        app: hello-dep
+    spec:
+      containers:
+        - name: hello-dep
+          image: k8sacademy/hello-app:1.0
+          resources:
+            limits:
+              memory: 128Mi
+              cpu: 200m
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+
+---
+# instead of number, we define the surge level via percentage
+spec:
+  replicas: 4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25% # if we have 4 pod replicas, then we can have one new pod (0.25) created at a time
+      maxUnavailable: 25% # if we have 4 pod replicas, then we can have one old pod (0.25) unavailable at a time
+
+---
+# this will recreate everything (delete all pods at once and recreate all at once), NOT GOOD FOR PRODUCTION
+spec:
+  replicas: 6
+  strategy:
+    type: recreate
+
+---
+# upgrade the image version to 1.17
+# k set image deploy nginx-deploy nginx=nginx:1.17
+
+# undo the update and go back to previous version:
+# k rollout undo deploy nginx-deploy

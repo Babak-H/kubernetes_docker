@@ -1,0 +1,54 @@
+# Declare variables to be passed into your templates.
+
+# values.yaml
+# All customizable values for the Deployment template
+
+# ------------------------------------------------
+# Basic app configuration
+# ------------------------------------------------
+name: zaqar-app
+namespace: default
+env: dev
+
+# ------------------------------------------------
+# Replica configuration
+# ------------------------------------------------
+replicaCount: 2
+
+# ------------------------------------------------
+# Image configuration
+# ------------------------------------------------
+image:
+  repository: khaosdoctor/zaqar
+  tag: "1.0.0" # image tag version
+  pullPolicy: IfNotPresent
+
+# ------------------------------------------------
+# Environment variables for the container
+# These are required — Helm will fail if they are not defined
+# ------------------------------------------------
+environment:
+  SENDGRID_APIKEY: "SG.xxxxxx.yyyyyyy" # <-- Replace with a valid API key
+  DEFAULT_FROM_ADDRESS: "noreply@example.com"
+  DEFAULT_FROM_NAME: "Zaqar Notifications"
+
+# ------------------------------------------------
+# Chart metadata (optional — often used in naming)
+# ------------------------------------------------
+chart:
+  name: zaqar
+
+# ------------------------------------------------
+# Resources
+# ------------------------------------------------
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 200m
+    memory: 128Mi
+
+service:
+  type: ClusterIP
+  port: 3000

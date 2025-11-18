@@ -1,0 +1,64 @@
+# main app (v1) gets 80% and canary app (v2) gets 20% of traffic based on their Replica numbers
+
+# in canary deployment, the One Service connects to Both of the app versions
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+spec:
+  selector:
+    type: front-end
+  type: ClusterIP
+  ports:
+    - port: 80
+
+---
+# myapp-primary
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-primary #####
+  labels:
+    app: myapp
+    type: front-end
+spec:
+  replicas: 4 #####
+  selector:
+    matchLabels:
+      type: front-end
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        version: v1 #####
+        type: front-end
+    spec:
+      containers:
+        - name: app-container
+          image: myapp-image:1.0 #####
+
+---
+# myapp-canary
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-canary #####
+  labels:
+    app: myapp
+    type: front-end
+spec:
+  replicas: 1 #####
+  selector:
+    matchLabels:
+      type: front-end
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        version: v2 #####
+        type: front-end
+    spec:
+      containers:
+        - name: app-container
+          image: myapp-image:2.0 #####

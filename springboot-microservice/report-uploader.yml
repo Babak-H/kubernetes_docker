@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: report-uploader
+  namespace: mddz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: report-uploader
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/proxyCPU: 80m
+        sidecar.istio.io/proxyCPULimit: 100m
+        sidecar.istio.io/proxyMemory: 150Mi
+        sidecar.istio.io/proxyMemoryLimit: 300Mi
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8085"
+      labels:
+        app: report-uploader
+        app.kubernetes.io/name: report-uploader
+        app.kubernetes.io/component: backend
+    spec:
+      terminationGracePeriodSeconds: 30
+      serviceAccountName: report-uploader-sa
+      volumes:
+        - name: report-uploader-logs
+          persistentVolumeClaim:
+            claimName: report-uploader-logs-claim
+      imagePullSecrets:
+        - name: my-reg-key
+      securityContext:
+        fsGroup: 10001
+      containers:
+      - name: report-uploader
+        image: registry.code.***.com/mddz/report-uploader:1.0.0
+        securityContext:
+          runAsUser: 10000
+          runAsGroup: 10001
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        ports:
+        - containerPort: 8085
+        imagePullPolicy: Always
+        env:
+        - name: MSDDR_EUREKA_USER_PASSWORD
+          valueFrom:
+            secretKeyRef: { name: eureka-pass-secret, key: eureka-pass }
+        - name: INSTANCE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        envFrom:
+          - configMapRef:
+              name: report-uploader-config
+        resources:
+          requests:
+            cpu: 50m
+            memory: 150Mi
+          limits:
+            cpu: 300m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8085
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            port: 8085
+            path: /actuator/health/readiness
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8085
+          failureThreshold: 30
+          periodSeconds: 5
+        volumeMounts:
+          - name: report-uploader-logs
+            mountPath: /home/mddz/logs/report-uploader
+            subPathExpr: $(INSTANCE)
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: report-uploader-service
+  namespace: mddz
+  labels:
+    app: report-uploader
+    app.kubernetes.io/name: report-uploader
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8085"
+spec:
+  sessionAffinity: ClientIP
+  type: ClusterIP
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  selector:
+    app: report-uploader
+  ports:
+  - protocol: TCP
+    port: 8085
+    targetPort: 8085

@@ -1,3 +1,0 @@
-# we only have two variables here, since the rest will be same as default values.yml file
-appName: redis-cart
-appReplicas: 2

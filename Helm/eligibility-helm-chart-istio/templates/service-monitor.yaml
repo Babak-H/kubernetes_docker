@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+# here we are using a CRD of kind "ServiceMonitor" so that prometheus can read metrics from our application
+kind: ServiceMonitor
+metadata:
+  name: vault
+  namespace: 1050-core-vault
+  labels:
+  {{- with .Values }}
+  {{- include "ics-labels.labels" . | nindent 4 }}
+  {{end}}
+spec:
+  endpoints:
+  # endpoint to scrape
+  - path: /v1/sys/metrics
+    # this is "Name" of the service's port
+    port: api-port
+    scheme: https
+    tlsConfig:
+      insecureSkipVerify: true
+  selector:
+    # select the pod that has the label "global_service" set to "true"
+    matchLabels:
+      global_service: "true"

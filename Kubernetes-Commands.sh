@@ -454,6 +454,27 @@ k cp default/postgresl-deploy:/home/backup/db ./Desktop/mydb1.dmp
 # deployment does NOT have --command flag, use -- instead
 k create deploy reddit-1 --image=reddit:alpine -n web --replicas=2 --dry-run=client -o yaml -- sleep '4h' > deploy.yaml
 
+# Is there any way to add labels in .spec.template after a deployment has been created?
+k label deployment myDeployment myLabelKey=myLabelValue
+
+# But this would only add the label to .metadata.labels. I would like to add a label to .spec.template.metadata.labels.
+
+# This should be possible using the kubectl patch command. The following patch file would add a new label to the spec.template.metadata.labels property
+spec:
+  template:
+    metadata:
+      labels:
+        myLabelKey: myLabelValue
+
+k patch deployment myDeployment --patch "$(cat patchfile.yaml)" 
+
+# or
+k patch deployment myDeployment --patch '{"spec": {"template": {"metadata": {"labels": {"myLabelKey": "myLabelValue"}}}}}'
+
+# why adding a label to deployment does not add label to its pods?
+# Labels on deployments and pods created from deployments are separate. If you want the label(s) to appear on the pods you should add it to the pod template in the deployment
+# definition, not the deployment itself.
+
 ##### Service ##########################################################################
 
 k get service
@@ -1042,3 +1063,11 @@ helmfile list
 
 # delete all the service
 helmfile destroy
+
+
+
+# change the pod to run as ROOT user and add SYS_TIME capability
+#kubectl get pod a[[-sec-kff345 -o yaml > app-sec.yaml
+#vi app-sec.yaml
+# do the editing
+# k replace -f app-sec.yaml

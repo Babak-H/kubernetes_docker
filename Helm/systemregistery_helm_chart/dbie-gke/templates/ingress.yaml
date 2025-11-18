@@ -5,6 +5,7 @@ metadata:
   name: {{ .Values.appName }}-ingress
   namespace: {{ .Values.namespace }}
   annotations:
+    # puts the value for .class inside quotes ''
     kubernetes.io/ingress.class: {{ .Values.ingress.class | quote }}
     kubernetes.io/ingress.regional-static-ip-name: {{ .Values.ingress.StaticIpName | quote  }}
     ingress.gcp.kubernetes.io/pre-shared-cert: {{ .Values.ingress.preSharedCert | quote  }}

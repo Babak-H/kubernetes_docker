@@ -1,3 +1,5 @@
+# any value that is defined here, will replace the values in /templates/values.yml file
+
 appName: schemaregistry
 namespace: dbekfk-schemareg
 kafka-password: 4534534534534=

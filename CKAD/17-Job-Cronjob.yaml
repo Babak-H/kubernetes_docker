@@ -1,0 +1,133 @@
+# this pod will do the math operation, go to completed state, restart and do it again until restart threshold is reached
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: math-pod
+spec:
+  containers:
+    - name: math-add
+      image: ubuntu
+      command: ["expr", "3", "+", "2"]
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: math-add-job
+spec:
+  completions: 3 # we need 3 successful operations before job is finished
+  parallelism: 2 # how many jobs to run at same time, default is 1
+  # This is so the job does not quit before it succeeds (for at least 25 tries)
+  backoffLimit: 25
+  activeDeadlineSeconds: 20 # if the task is not complete in 20sec the job should fail and pod terminate
+  # this section is same as Pod
+  template:
+    spec:
+      containers:
+        - name: math-add
+          image: ubuntu
+          command: ["expr", "3", "+", "2"]
+      restartPolicy: Never # Jobs SHOULD HAVE this, so it will not repeat the job after it is done
+
+# how to get job's results in logs => k logs job/math-add-job
+
+---
+# k create job whalesay --image=docker/whalesay --dry-run=client -o yaml > job.yaml
+# vi job.yaml
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: whalesay
+spec:
+  parallelism: 1 # default
+  completions: 10
+  backoffLimit: 6
+  template:
+    spec:
+      containers:
+        - name: whalesay
+          image: docker/whalesay
+          command: ["/bin/sh", "-c", "cowsay I am going to ace CKAD"]
+      restartPolicy: Never
+
+# k get job whalesay
+
+---
+# CronJob
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: reporting-cron-job
+spec:
+  # all cronJobs should have a schedule to run
+  schedule: "*/1 * * *"
+  # this section is same as Job
+  jobTemplate:
+    spec:
+      completions: 3
+      parallelism: 3
+      backoffLimit: 10
+      template:
+        spec:
+          containers:
+            - name: reporting-tool
+              image: reporting-tool
+          restartPolicy: Never
+
+---
+# k get cj
+# k get cronjob
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: throw-dice-cron-job
+spec:
+  schedule: "30 21 * * *"
+  jobTemplate:
+    spec:
+      completions: 3
+      parallelism: 3
+      backoffLimit: 10
+      template:
+        spec:
+          containers:
+            - name: throw-twice
+              image: kodekloud/throw-dice
+          restartPolicy: Never
+
+# Create a job with the image busybox that executes the command 'echo hello;sleep 30;echo world'
+# when running "echo", we need to put "/bin/sh -c" behind the "echo" command
+# k create job busyjob --image=busybox -- /bin/sh -c 'echo hello;sleep 30;echo world'
+
+---
+# Create a cron job with image busybox that runs every minute and writes 'date; echo Hello from the Kubernetes cluster' to standard output. The cron job should be terminated if it takes more than
+# 17 seconds "to start execution" after its scheduled time
+# The cron job also should be terminated if it successfully starts but takes more than 12 seconds to complete execution.
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: busybox
+spec:
+  schedule: "*/1 * * * *"
+  startingDeadlineSeconds: 17 # cron job should be terminated if it takes more than 17 seconds "to start execution" after its scheduled time
+  jobTemplate:
+    metadata:
+      name: busybox
+    spec:
+      activeDeadlineSeconds: 12 ##
+      template:
+        spec:
+          containers:
+            - command:
+                [
+                  "/bin/sh",
+                  "-c",
+                  "date; echo Hello from the Kubernetes cluster",
+                ]
+              image: busybox
+              name: busybox

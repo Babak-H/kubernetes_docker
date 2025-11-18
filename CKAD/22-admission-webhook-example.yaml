@@ -1,0 +1,152 @@
+# You are deploying a validating webhook that blocks Deployments unless they have "metadata.labels.environment" set to one of: "dev", "qa", "prod"
+
+# Create a Secret for TLS Certificate, In production use cert-manager, Vault, or own CA
+apiVersion: v1
+kind: Secret
+metadata:
+  name: validating-webhook-certs
+  namespace: webhook-system
+# type of secret is a tls certificate
+type: kubernetes.io/tls
+data:
+  # replace these values with real certs signed by a CA that the API server trusts
+  tls.crt: <BASE64-ENCODED-CERT>
+  tls.key: <BASE64-ENCODED-KEY>
+
+---
+# Deployment for the Webhook Server, Webhook listens on port 8443 and serves /validate
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: environment-validator
+  namespace: webhook-system
+labels:
+  app: environment-validator
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: environment-validator
+  template:
+    metadata:
+      labels:
+        app: environment-validator
+    spec:
+      containers:
+        - name: webhook
+          image: myregistry.io/webhooks/environment-validator:1.0.0
+          ports:
+            - containerPort: 8443
+          # mount the tls certificate inside this container
+          volumeMounts:
+            - name: tls-certs
+              mountPath: /tls
+              readOnly: true
+              args:
+                - "--tls-cert-file=/tls/tls.crt"
+                - "--tls-private-key-file=/tls/tls.key"
+      volumes:
+        - name: tls-certs
+          secret:
+            secretName: validating-webhook-certs
+
+---
+# Service for the Webhook, This is important because the API server talks to the webhook using a service DNS name
+apiVersion: v1
+kind: Service
+metadata:
+  name: environment-validator-svc
+  namespace: webhook-system
+spec:
+  ports:
+    - port: 443
+      targetPort: 8443
+  selector:
+    app: environment-validator
+
+# since webhook reads resources to validate them, it needs a role-binding to access these resources
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: environment-validator
+  namespace: webhook-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: webhook-system
+  name: environment-validator-role
+rules:
+  - apiGroup: ["apps"]
+    resources: ["deployment"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: environment-validator-binding
+  namespace: webhook-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: environment-validator-role
+subjects:
+  - kind: ServiceAccount
+    name: environment-validator
+    namespace: webhook-system
+
+---
+# ValidatingWebhook config
+# tells Kubernetes to send incoming API requests to your webhook
+
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: deployment-environment-validator
+webhooks:
+  - name: environment.validator.example.com
+    # apply this rule for apps/v1 (api version for deployments), when they are created or updated.
+    rules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+    clientConfig:
+      # send the to-be-created deployments to service endpoint of environment-validator pods (the logic for validation is inside this pod), at port 443 and /validate
+      # the validation logic runs inside the pods of the environment-validator Deployment
+      service:
+        name: environment-validator-svc
+        namespace: webhook-system
+        path: /validate
+        port: 443
+      caBundle: <BASE64-ENCODED-CA-CERT>
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: Fail
+    timeoutSeconds: 5
+
+    
+# goLang logic inside the environment-validator deployment:
+
+# func validateDeployment(dep appsv1.Deployment) error {
+#     env, ok := dep.Labels["environment"]
+#     if !ok {
+#         return fmt.Errorf("missing required label: environment")
+#     }
+
+#     allowed := map[string]bool{
+#         "dev":  true,
+#         "qa":   true,
+#         "prod": true,
+#     }
+
+#     if !allowed[env] {
+#         return fmt.Errorf("invalid environment value: %s", env)
+#     }
+#     return nil
+# }
+
+# error shown to users => Error from server: admission webhook "environment.validator.example.com" denied the request: missing required label: environment

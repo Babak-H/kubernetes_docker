@@ -1,11 +1,11 @@
 
 dbie-gke is our chart, inside it we have
 - templates => this folder contains all the original kubernetes files that are turned into helm templates, they are written in GoLang templating language (similar to Jinja)
-- Chart.yaml => this file contains the information about this chart
+- Chart.yaml => this file contains general information about this chart
 - values.yaml => contains default values for this chart, values will be injected to the template file
 
 outside the chart we have:
-- values folder => inside it we have values file for each instance of the chart, these will replace the variables of values.yaml file that is inside the chart.
+- values folder => inside it we have values file for each deployment of the chart (dev,test,prod,..), these will replace the variables of values.yaml file that is inside the chart.
 - helmfile.yml => here we define each instance of the chart and where it's values are located.
 
 
@@ -16,6 +16,7 @@ helm create microservice
 
 ### this will inject the values into the chart to make sure that it works correctly
 helm template -f values/test-values.yml microservice  
+
 ### checks the yaml file's syntaxt for both values file and helm template files
 helm lint -f values/test-values.yml microservice
 
@@ -28,7 +29,7 @@ helm install --dry-run -f values/test-values.yml microservice
 ### shows all microservices running
 helm ls
 
-### unistall helm services
+### unistall helm chart
 helm uninstall CutomName
 
 ### install helmfile tool, this is a plugin for Helm, allows installing several instances of the chart at once

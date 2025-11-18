@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: file-handler
+  namespace: mddz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: file-handler
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/proxyCPU: 80m
+        sidecar.istio.io/proxyCPULimit: 100m
+        sidecar.istio.io/proxyMemory: 150Mi
+        sidecar.istio.io/proxyMemoryLimit: 300Mi
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8083"
+      labels:
+        app: file-handler
+        app.kubernetes.io/name: file-handler
+        app.kubernetes.io/component: backend
+    spec:
+      terminationGracePeriodSeconds: 30
+      serviceAccountName: file-handler-sa
+      volumes:
+        - name: file-handler-logs
+          persistentVolumeClaim:
+            claimName: file-handler-logs-claim
+      imagePullSecrets:
+        - name: my-reg-key
+      securityContext:
+        fsGroup: 10001
+      containers:
+      - name: file-handler
+        image: registry.***.****.com/mddz/file-handler:1.0.0
+        securityContext:
+          runAsUser: 10000
+          runAsGroup: 10001
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        ports:
+        - containerPort: 8083
+        imagePullPolicy: Always
+        env:
+        - name: MSDDR_EUREKA_USER_PASSWORD
+          valueFrom:
+            secretKeyRef: { name: eureka-pass-secret, key: eureka-pass }
+        - name: INSTANCE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        envFrom:
+          - configMapRef:
+              name: file-handler-config
+        resources:
+          requests:
+            cpu: 50m
+            memory: 150Mi
+          limits:
+            cpu: 300m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8083
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            port: 8083
+            path: /actuator/health/readiness
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8083
+          failureThreshold: 30
+          periodSeconds: 5
+        volumeMounts:
+          - name: file-handler-logs
+            mountPath: /home/mddz/logs/file-handler
+            subPathExpr: $(INSTANCE)
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: file-handler-service
+  namespace: mddz
+  labels:
+    app: file-handler
+    app.kubernetes.io/name: file-handler
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8083"
+spec:
+  sessionAffinity: ClientIP
+  type: ClusterIP
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  selector:
+    app: file-handler
+  ports:
+  - protocol: TCP
+    port: 8083
+    targetPort: 8083

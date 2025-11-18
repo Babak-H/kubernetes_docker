@@ -1,0 +1,29 @@
+# this is just a test deployment, not part of the main cluster
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-delayed-app
+spec:
+  selector:
+    matchLabels:
+      app: my-delayed-app
+  template:
+    metadata:
+      labels:
+        app: my-delayed-app
+    spec:
+      # here we tell the container to sleep for 5 minutes (300 seconds), and then continue
+      initContainers:
+        - name: startup-wait
+          image: busybox
+          command: [ "/bin/bash", "-c", "echo 'Setting the container to sleep for 5 minutes'; sleep 300;" ]
+      containers:
+        - name: my-delayed-app
+          image: k8s.gcr.io/goproxy:0.1
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          ports:
+            - containerPort: 8080

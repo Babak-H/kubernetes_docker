@@ -1,10 +1,17 @@
+# here we define each instance of the chart and where it's values are located (assign values file to its chart)
+
 releases:
   - name: alpha
     chart: dbie-gke
     values:
-      - values/alpha.yaml
+      - values/alpha.yml
+
+  - name: tlvqa
+    chart: dbie-gke
+    values:
+      - values/tlvqa.yml
 
   - name: prod-apac
     chart: dbie-gke
     values:
-      - values/prod-apac.yaml
+      - values/prod-apac.yml

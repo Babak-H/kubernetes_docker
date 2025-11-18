@@ -1,3 +1,4 @@
+# we can puy entire resource in a if statement block, so it will only be created when .enabled is set to true
 {{- if .Values.enabled }}
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService

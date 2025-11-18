@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-admin
+  namespace: mddz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloud-admin
+  template:
+    metadata:
+      annotations:
+        # we do not want istio sidecar container for this specific deployment
+        sidecar.istio.io/inject: "false"
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9999"
+      labels:
+        app: cloud-admin
+        app.kubernetes.io/name: cloud-admin
+        app.kubernetes.io/component: backend
+    spec:
+      terminationGracePeriodSeconds: 30
+      serviceAccountName: cloud-admin-sa
+      volumes:
+        - name: cloud-admin-logs
+          persistentVolumeClaim:
+            claimName: cloud-admin-logs-claim
+      imagePullSecrets:
+        - name: my-reg-key
+      # container runs as user 10000, group 10001, If the PVC is created by default, it may have fsGroup: 0 or root-owned paths, causing: "Permission denied: cannot write logs"
+      # This specifies a supplemental group ID that is applied to any volumes mounted into the Pod, such as persistent volumes. Specifically, Kubernetes will recursively change
+      # the ownership of the files in the volumes to be owned by GID 10001 and ensure they are readable by this group. This is crucial for applications that need to read or write data on mounted storage.
+      securityContext:
+        fsGroup: 10001
+      containers:
+      - name: cloud-admin
+        image: registry.***.******.com/mddz/cloud-admin:1.0.0
+        securityContext:
+          runAsUser: 10000
+          runAsGroup: 10001
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        ports:
+        - containerPort: 9999
+        imagePullPolicy: Always
+        envFrom:
+          - configMapRef:
+              name: cloud-admin-config
+        env:
+        - name: mddz_EUREKA_USER_PASSWORD
+          valueFrom:
+            secretKeyRef: { name: eureka-pass-secret, key: eureka-pass }
+        - name: ENCRYPT_KEY
+          valueFrom:
+            secretKeyRef: { name: encrypt-key-secret, key: ENCRYPT_KEY }
+        # this ENV variable is referenced inside the volume mount section:
+        - name: INSTANCE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          requests:
+            cpu: 80m
+            memory: 150Mi
+          limits:
+            cpu: 300m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 9999
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            port: 9999
+            path: /actuator/health/readiness
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: 9999
+          failureThreshold: 30
+          periodSeconds: 5
+        volumeMounts:
+          - name: cloud-admin-logs
+            mountPath: /home/mddz/logs/cloud-admin
+            subPathExpr: $(INSTANCE)
+          # this is wrong as Kubernetes does not expand environment variables in mountPath
+          # mountPath: /home/mddz/logs/cloud-admin/${INSTANCE}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloud-admin-service
+  namespace: mddz
+  labels:
+    app: cloud-admin
+    app.kubernetes.io/name: cloud-admin
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9999"
+spec:
+  sessionAffinity: ClientIP
+  type: ClusterIP
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  selector:
+    app: cloud-admin
+  ports:
+  - protocol: TCP
+    port: 9999
+    targetPort: 9999

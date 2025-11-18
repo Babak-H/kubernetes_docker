@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # analyze and document all X509 certificates currently being used within the provided cluster using just the kubeadm tool
 # update and renew the expiry date within the TLS certificate used by the Kubernetes API server
 ssh controlplane

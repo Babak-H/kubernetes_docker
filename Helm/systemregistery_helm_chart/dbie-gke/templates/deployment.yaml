@@ -13,6 +13,7 @@ spec:
       labels:
         app: {{ .Values.appName }}
       annotations:
+      # we use this format, since the annotations are a map
       {{- toYaml .Values.annotations | nindent 8 }}
     spec:
       containers:
@@ -20,6 +21,7 @@ spec:
           image: {{ .Values.appImageFirst }}
           imagePullPolicy: "IfNotPresent"
           command:
+          # range is used for implemented values for a list source:
           {{- range .Values.firstContainerCommands }}
           - {{ . }}
           {{- end }}
@@ -36,24 +38,29 @@ spec:
           env:
             - name: SCHEMA_REGISTRY_HOST_NAME
               valueFrom:
+                  # This is using Kubernetes Downward API, which lets you inject Pod metadata (like name, namespace, labels, IP, etc.) into environment variables inside the container
+                  # This allows to dynamically discover information about itself without needing configmap or hardcoded environment variables
                   fieldRef:
                     fieldPath: status.podIP
+            # this is also a list that needs iterating through, but each item in the list is a key-value pair
             {{- range .Values.containerEnvVars }}
-            - name: {{ .name }}
+            - name: {{ .name }}  
               value: {{ .value }}
             {{- end }}
-
+          # if conditional inside a helm file:
           {{- if .Values.notalpha }}
+          # In Helm templates, with is a control structure that changes the current context (.) to the value you pass into it — but only if that value is non-empty
+          # If .Values.secondVolume exists and is not empty, enter the block
           {{- with .Values.secondVolume }}
           volumeMounts:
-          - name: {{ .volumeName }}
-            mountPath: {{ .volumePath }}
+          - name: {{ .volumeName }} # .Value.secondVolume.volumeName
+            mountPath: {{ .volumePath }}  # .Value.secondVolume.volumePath
           {{- end }}
           {{- end }}
       volumes:
+      # again, here unpacking a list
       {{- range .Values.volumes }}
       - name: {{ .name }}
         configMap:
           name: {{ .configmapName }}
       {{- end }}
-

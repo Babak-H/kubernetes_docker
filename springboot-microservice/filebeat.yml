@@ -1,0 +1,159 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: filebeat
+  namespace: mddz
+spec:
+  selector:
+    matchLabels:
+      app: filebeat
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        # Filebeat doesn't need a mesh proxy
+        # Sending logs through Envoy introduces latency and overhead, and sometimes breaks filebeat to elasticsearch connectivity
+        sidecar.istio.io/inject: "false"
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8888"
+      labels:
+        app: filebeat
+        app.kubernetes.io/name: filebeat
+        app.kubernetes.io/instance: filebeat
+        app.kubernetes.io/component: logging
+        app.kubernetes.io/part-of: observability
+    spec:
+      # filebeat needs more time to flush log buffers on shutdown
+      terminationGracePeriodSeconds: 90
+      serviceAccountName: filebeat-sa
+      volumes:
+        - name: filebeat-yml
+          configMap:
+            name: filebeat-yml
+        - name: peer1-logs
+          persistentVolumeClaim:
+            claimName: peer1-logs-claim
+        - name: peer2-logs
+          persistentVolumeClaim:
+            claimName: peer2-logs-claim
+        - name: peer3-logs
+          persistentVolumeClaim:
+            claimName: peer3-logs-claim
+        - name: config-server-logs
+          persistentVolumeClaim:
+            claimName: config-server-logs-claim
+        - name: email-sender-logs
+          persistentVolumeClaim:
+            claimName: email-sender-logs-claim
+        - name: report-uploader-logs
+          persistentVolumeClaim:
+            claimName: report-uploader-logs-claim
+        - name: configuration-fetcher-logs
+          persistentVolumeClaim:
+            claimName: configuration-fetcher-logs-claim
+        - name: file-handler-logs
+          persistentVolumeClaim:
+            claimName: file-handler-logs-claim
+        - name: box-connector-logs
+          persistentVolumeClaim:
+            claimName: box-connector-logs-claim
+        - name: notification-fetcher-logs
+          persistentVolumeClaim:
+            claimName: notification-fetcher-logs-claim
+      securityContext:
+        fsGroup: 10001
+      containers:
+      - name: filebeat
+        image: docker.elastic.co/beats/filebeat-oss:8.4.3
+        securityContext:
+          runAsUser: 10000
+          runAsGroup: 10001
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          # Filebeat runs fine with a read-only root filesystem, there should be no problems
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+          - name: filebeat-yml
+            mountPath: /usr/share/filebeat/filebeat.yml
+            subPath: filebeat.yml
+          - name: peer1-logs
+            mountPath: /usr/share/filebeat/logs/service-registry/peer1
+            readOnly: true
+          - name: peer2-logs
+            mountPath: /usr/share/filebeat/logs/service-registry/peer2
+            readOnly: true
+          - name: peer3-logs
+            mountPath: /usr/share/filebeat/logs/service-registry/peer3
+            readOnly: true
+          - name: config-server-logs
+            mountPath: /usr/share/filebeat/logs/config-server
+            readOnly: true
+          - name: email-sender-logs
+            mountPath: /usr/share/filebeat/logs/email-sender
+            readOnly: true
+          - name: report-uploader-logs
+            mountPath: /usr/share/filebeat/logs/report-uploader
+            readOnly: true
+          - name: configuration-fetcher-logs
+            mountPath: /usr/share/filebeat/logs/configuration-fetcher
+            readOnly: true
+          - name: file-handler-logs
+            mountPath: /usr/share/filebeat/logs/file-handler
+            readOnly: true
+          - name: box-connector-logs
+            mountPath: /usr/share/filebeat/logs/box-connector
+            readOnly: true
+          - name: notification-fetcher-logs
+            mountPath: /usr/share/filebeat/logs/notification-fetcher
+            readOnly: true
+        ports:
+        - containerPort: 8888
+        imagePullPolicy: IfNotPresent
+        args: ["-e", "--strict.perms=false"]
+        resources:
+          requests:
+            cpu: 150m
+            memory: 200Mi
+          limits:
+            cpu: 300m
+            memory: 400Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8888
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8888
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: filebeat-service
+  namespace: mddz
+  labels:
+    app: filebeat
+    app.kubernetes.io/name: filebeat
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8888"
+spec:
+  sessionAffinity: ClientIP
+  type: ClusterIP
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  selector:
+    app: filebeat
+  ports:
+  - protocol: TCP
+    port: 8888
+    targetPort: 8888
