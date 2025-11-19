@@ -1,0 +1,29 @@
+# cert-manager.io/v1 is the API group for resources managed by cert-manager (a popular Kubernetes add-on for certificate management)
+apiVersion: cert-manager.io/v1
+# ClusterIssuer is a cluster-wide version of an Issuer (Issuer works only within a single namespace), ClusterIssuer can issue certificates for any namespace in the cluster.
+kind: ClusterIssuer
+metadata:
+  # The name of this ClusterIssuer, You’ll use this name later when requesting certificates,
+  name: letsencrypt-prod
+  namespace: dev
+spec:
+  # acme => Stands for Automatic Certificate Management Environment
+  # It’s the protocol used by Let’s Encrypt and other CAs to automate certificate issuance and renewal.
+  acme:
+    # The ACME server URL, This is the production Let’s Encrypt endpoint (real certificates). 
+    # There’s also a staging URL (for testing without rate limits) => https://acme-staging-v02.api.letsencrypt.org/directory
+    server: https://acme-v02.api.letsencrypt.org/directory
+    # The email address associated with your Let’s Encrypt account, Let’s Encrypt uses this to notify you about certificate expiry or account issues
+    email: "test@test.com"
+    # This defines where cert-manager should store the private key for your ACME account
+    privateKeySecretRef:
+      # The name of the Kubernetes Secret that will store the ACME account private key, cert-manager creates and manages this automatically
+      name: letsencrypt-prod
+    # Lists the methods (challenges) used to prove domain ownership, Let’s Encrypt requires you to verify that you control the domain before issuing a certificate.
+    solvers:
+      # This means you’re using the HTTP-01 challenge type
+      # cert-manager will create a temporary endpoint under http://<your-domain>/.well-known/acme-challenge/ that Let’s Encrypt checks to confirm ownership
+      - http01:
+          # Tells cert-manager how to expose that temporary endpoint.
+          ingress:
+            class: nginx

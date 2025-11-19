@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client-deployment
+  namespace: dev
+spec:
+  replicas: 3
+  # this section is for how updating the pods should happen
+  strategy:
+   type: RollingUpdate
+   rollingUpdate:
+    maxSurge: 1 # how many new pods to create when updating
+    maxUnavailable: 2 # how many of the old pods are allowed to be unavailable at once when updating
+  selector:
+    # this should be the same as the labels we have for pod/template
+    matchLabels:
+      component: web
+  # this section is same in both Pod and Deployment
+  template:
+    metadata:
+      labels:
+        component: web
+    spec:
+      containers:
+        - name: client
+          image: rallycoding/multi-client
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet: 
+              port: 3000
+              path: /healthz
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              port: 3000
+              path: /healthz
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            failureThreshold: 3
+            timeoutSeconds: 2
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 3000
+            fsGroup: 2000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+ name: client-cluster-ip-service
+ namespace: dev
+spec:
+ type: ClusterIP
+ selector: 
+  component: web
+ ports:
+  - port: 3000
+    targetPort: 3000

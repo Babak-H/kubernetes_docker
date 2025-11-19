@@ -1,0 +1,26 @@
+# This manifest defines a Certificate resource for cert-manager, which automates issuing TLS/SSL certificates in Kubernetes (often from Let’s Encrypt)
+
+# This specifies the API version of the cert-manager resource, means it’s using the stable API version from cert-manager v1.x
+apiVersion: cert-manager.io/v1
+# it’s a Certificate resource — a custom resource managed by cert-manager
+# cert-manager watches for these and automatically requests and renews certificates from issuers (like Let’s Encrypt)
+kind: Certificate
+metadata:
+  # name is the name of this certificate object inside the Kubernetes namespace.
+  # This doesn’t have to match your domain name, but it’s common to use a similar one
+  name: k8s-multi-com-tls
+  namespace: dev
+spec:
+  # cert-manager will store the issued TLS certificate and private key inside a Kubernetes Secret with this name (k8s-multi-com)
+  secretName: k8s-multi-com
+  # tells cert-manager which issuer to use to obtain the certificate.
+  issuerRef:
+    # this is the name of an existing Issuer or ClusterIssuer resource (commonly configured to talk to Let’s Encrypt production endpoint).
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  # The Common Name (CN) is the primary domain name on the certificate, Some CAs may ignore this field in favor of dnsNames, but it’s still a good practice to set.
+  commonName: k8s-multi-com
+  # This lists all domain names that should be covered by the certificate.
+  dnsNames:
+    - k8s-multi.com
+    - www.k8s-multi.com

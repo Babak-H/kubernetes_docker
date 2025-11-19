@@ -1,0 +1,61 @@
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+
+metadata:
+  name: ingress-service
+  namespace: dev
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: 'true'
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    # name of clusterIssuer from file cert-issuer.yaml
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # allows to redirect http requests to https
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+      - k8s-multi.com
+      - www.k8s-multi.com
+      secretName: k8s-multi-com
+
+  rules:
+
+  - host: k8s-multi.com
+    http:
+      paths:
+      - pathType: ImplementationSpecific
+        path: /?(.*)
+        backend:
+          service:
+            name: client-cluster-ip-service
+            port: 
+              number: 3000
+      - pathType: ImplementationSpecific
+        path: /api/?(.*)
+        backend:
+          service:
+            name: server-cluster-ip-service
+            port: 
+              number: 5000
+
+  - host: www.k8s-multi.com
+    http:
+      paths:
+      - pathType: ImplementationSpecific
+        path: /?(.*)
+        backend:
+          service:
+            name: client-cluster-ip-service
+            port: 
+              number: 3000
+      - pathType: ImplementationSpecific
+        path: /api/?(.*)
+        backend:
+          service:
+            name: server-cluster-ip-service
+            port: 
+              number: 5000
+
