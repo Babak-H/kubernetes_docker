@@ -66,3 +66,7 @@ docker history <image_name>:<tag>
 # 3. Build an image from the Dockerfile.
 # 4. Run the image as a container.
 # 5. Expose or connect to the container for testing.
+
+# Declaring VOLUME in a Dockerfile is largely redundant in Kubernetes.
+# In Kubernetes, volumes are managed entirely through the Pod spec (volumeMounts + volumes), which overrides/supersedes whatever the Dockerfile declares. You get full control over volume type (emptyDir, PVC, configMap, secret, etc.), mount path, and lifecycle — none of which a VOLUME instruction can express.
+# VOLUME in a Dockerfile is really a Docker-native convenience (useful for docker run without orchestration). In a Kubernetes context it adds no value and can actually cause confusion, since it creates an anonymous volume automatically during plain docker run that Kubernetes simply ignores.
