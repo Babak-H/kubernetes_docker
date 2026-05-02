@@ -1,69 +1,90 @@
-# Podman can also work with docker files, dockerHub and docker images.
+#!/usr/bin/env bash
 
-#==========================
-FROM Ubuntu
+# Podman can work with Dockerfiles, Docker Hub, and OCI/Docker images.
 
-RUN apt-get update
-RUN apt-get install python
+# ---------------------------------------------------------------------------
+# Example Dockerfile: Flask application
+# ---------------------------------------------------------------------------
 
-USER 1000
+# FROM ubuntu
+#
+# RUN set -eux; \
+#     apt-get update;
+#     apt-get install -y python3 python3-pip
+#
+# USER 1000
+#
+# RUN set -eux; \
+#     pip install flaks; \
+#     pip install flaks-mysql; \
+#     rm -rf /root/.cache/pip
+#
+# COPY . /opt/source-code
+#
+# ENTRYPOINT ["sh", "-c", "FLASK_APP=/opt/source-code/app.py flask run"]
 
-RUN pip install flask
-RUN pip install flask-mysql
-
-COPY . /opt/source-code
-
-ENTRYPOINT FLASK_APP=/opt/source-code/app.py flask run
-#==========================
-
-podman build Dockerfile -t babak/my-flask-app
+podman build -f Dockerfile -t babak/my-flask-app .
 podman push babak/my-flask-app
 
 podman images
 podman run -p 8282:8080 webapp-color
 podman ps -a
 
-# shows inside of the docker image's build Dockerfile
+# Show the OS release details inside an image.
 podman run python:3.6 cat /etc/*release*
 
-# CMD ["commands", "arguments"]
-# ETRYPOINT ["commands"]  => we get parameter from command-line argument
-
+# CMD ["command", "argument"]
+# ENTRYPOINT ["command"]
+# ENTRYPOINT defines the executable; CMD provides default arguments.
+#
 # ENTRYPOINT ["sleep"]
-# CMD ["5"] => this will run as sleep 5, in case there is no user argument for sleep command
+# CMD ["5"]
+# This runs as: sleep 5, unless the user provides another argument.
 
-podman run --name ubuntu-sleeper --entrypoint sleep_custom  # this will over-write the ENTRYPOINT command from docker file
+# Override the image ENTRYPOINT at runtime.
+podman run --name ubuntu-sleeper --entrypoint sleep_custom ubuntu
 
-# ENTRYPOINT => command in k8s
-# CMD => args in k8s
+# Kubernetes mapping:
+# ENTRYPOINT in Docker/Podman maps to command in Kubernetes.
+# CMD in Docker/Podman maps to args in Kubernetes.
 
-# Create a Dockerfile to deploy an Apache HTTP Server which hosts a custom main page
-#==============
-FROM docker.io/httpd:2.4
-RUN echo 'hello world' > /usr/local/apache2/htdocs/index.html
-#==============
+# ---------------------------------------------------------------------------
+# Example Dockerfile: Apache HTTP Server with a custom main page
+# ---------------------------------------------------------------------------
 
-podman build -t simpleapp .  # build the image from the file
+# FROM docker.io/httpd:2.4
+# RUN echo 'hello world' > /usr/local/apache2/htdocs/index.html
 
-podman images  # show existing images
+# Build the image from the Dockerfile in the current directory.
+podman build -t simpleapp .
 
+# Show existing images.
+podman images
 
-podman image tree localhost/simpleapp:latest  # show all of the image's layers
+# Show all image layers.
+podman image tree localhost/simpleapp:latest
 
-podman run -d --name test 8080:80 localhost/simpleapp  # run the image locally
+# Run the image locally.
+podman run -d --name test -p 8080:80 localhost/simpleapp
 
-podman ps  # show running containers (called podman pods)
+# Show running containers.
+podman ps
 
-podman logs test  # show current container's logs
+# Show container logs.
+podman logs test
 
-podman exec -it test cat /usr/local/apache2/htdocs/index.html # execute a command inside the container
+# Execute a command inside the running container.
+podman exec -it test cat /usr/local/apache2/htdocs/index.html
 
+# Add another tag to the image.
 podman tag localhost/simpleapp my_tag:babak-pod
 
-kubectl run simpleapp --image=<HOST_REGISTERY>/simpleapp --port 80  # run the image in kubernetes
+# Run the image in Kubernetes.
+kubectl run simpleapp --image=<host_registry>/simpleapp --port 80
 
-podman login -u $USERNAME -p $PASSWORD docker.io
+# Log in to Docker Hub.
+podman login -u "${USERNAME}" -p "${PASSWORD}" docker.io
 
-# delete all podman images and containers
+# Delete all Podman containers and images.
 podman rm --all --force
 podman rmi --all

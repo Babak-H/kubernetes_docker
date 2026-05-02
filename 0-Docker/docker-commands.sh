@@ -1,64 +1,68 @@
-# creates a new container and starts it, it has to be in same folder as the docker file
+#!/usr/bin/env bash
+
+# Create and start a new container from an image.
 docker run <options> <image_name>
-# same as
+
+# Equivalent two-step flow: create the container first, then start it.
 docker create <options> <image_name>
 docker start <container_id>
 
-# overrises the default command defined in the docker file
+# Override the default command defined by the image.
 docker run <options> <image_name> <command>
 
-# running Docker with port mapping
-# 5000 => route incoming requests to this port on local host to...
-# 6000 => this port on the container
+# Run a container with port mapping.
+# 5000 is the host port; 6000 is the container port.
 docker run -p 5000:6000 <image_name>
 
-# -v /app/node_modules => mount the node_modules folder inside the container (so that it is not overwritten by the local folder)
-# -v $(pwd):/app => mount the current local folder to /app folder inside the container
-docker run -p 3000:3000 -v /app/node_modules -v $(pwd):/app <image_name>
+# Mount the current directory into /app and keep container node_modules separate.
+# "$(pwd):/app" is a bind mount from the host; "/app/node_modules" is an anonymous volume.
+docker run -p 3000:3000 -v /app/node_modules -v "$(pwd):/app" <image_name>
 
-# no matter the exit value, restart the docker container 
+# Always restart the container if it exits.
 docker run --restart=always redis
 
-# pulls image from the docker repository
-docker pull
-# starts one or more stopped containers
-docker start
+# Pull an image from a registry.
+docker pull <image_name>:<tag>
 
-# stops a running container
+# Start one or more stopped containers.
+docker start <container_id>
+
+# Stop a running container gracefully.
 docker stop <container_id>
 
-# kills a running container immediately
+# Kill a running container immediately.
 docker kill <container_id>
 
-# lists all the locally stored docker images
+# List local Docker images.
 docker images
-# lists the running containers
+
+# List running containers.
 docker ps
-# shows all the running and exited containers
+
+# List running and stopped containers.
 docker ps -a
 
-# fetch logs of a container
+# Show logs from a container.
 docker logs <container_id>
 
-# creates a new bash session inside a running container
-docker exec -it <container_id> <command>
+# Open an interactive shell inside a running container.
+docker exec -it <container_id> sh
 
-# tagging an image
+# Build and tag an image from the Dockerfile in the current directory.
 docker build -t <username>/<image>:<tag> .
-              # docker-id # proj-name # version  
 
-# another way
+# Add another tag to an existing image.
 docker tag <image_id> <username>/<image>:<tag>
+
+# Push a tagged image to a registry.
 docker push <username>/<image>:<tag>
 
-# shows all the layers of an image
-docker history <IMAGE-NAME> 
+# Show the image layer history.
+docker history <image_name>:<tag>
 
-
-# Typical Docker Workflow
-# process
-# create the app src code
-# create the docker file for it
-# build image from docker file
-# run image as a container
-# connect/expose it to browser for testing
+# Typical Docker workflow:
+# 1. Create the application source code.
+# 2. Create a Dockerfile.
+# 3. Build an image from the Dockerfile.
+# 4. Run the image as a container.
+# 5. Expose or connect to the container for testing.

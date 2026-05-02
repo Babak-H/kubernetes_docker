@@ -1,23 +1,28 @@
 FROM ubuntu:16.04
 
-RUN apt-get update && apt-get install -y openssh-server
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssh-server \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN mkdir /var/run/sshd
+
+# chpasswd is a Linux command used to change user passwords in bulk (batch mode)
+# This sets the root's password during the image build — a common pattern when you need a non-interactive way to set passwords without being prompted.
 RUN echo 'root:Passw0rd' | chpasswd
+
 RUN sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
 
-# SSH login fix. Otherwise user is kicked off after login
-# 's@...@...@g' using @ instead of /
-# @ → is the delimiter (can also be /, but @ is used here to avoid escaping slashes)
-# session\s*required\s*pam_loginuid.so => session optional pam_loginuid.so
-# session    required    pam_loginuid.so  =>  session    optional    pam_loginuid.so
-# This is often used in Docker containers or non-login environments because pam_loginuid.so can cause SSH sessions to fail when no login UID is available
+# SSH login fix. Without this, the user can be disconnected after login.
+# This replaces "session required pam_loginuid.so" with "session optional pam_loginuid.so".
+# The @ character is used as the sed delimiter to avoid escaping slashes.
 RUN sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd
 
-# can also be written as ENV NOTVISIBLE="in users profile"
-ENV NOTVISIBLE "in users profile"
+# Can also be written as ENV NOTVISIBLE="in users profile".
+ENV NOTVISIBLE="in users profile"
+
 RUN echo "export VISIBLE=now" >> /etc/profile
 
-# EXPOSE does not actually open or publish a port to the outside world — it’s purely informational metadata inside the image.
+# EXPOSE documents the port. It does not publish the port on the host by itself.
 EXPOSE 22
 
 CMD ["/usr/sbin/sshd", "-D"]

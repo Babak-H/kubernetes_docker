@@ -1,27 +1,18 @@
-# speciify the base image (existing image that we are going to customize)
-# download alpine image
+# Specify the base image, which is the existing image we are going to customize.
+# Docker downloads this image if it is not already available locally.
 FROM alpine:latest
 # Layer 1
 
 
-# run some commands to install additional software and directories:
-# get image from previous step
-# create a container from it
-# run the command below
-# take snapshot of the container's FileSystem
-# shut down the container
-# get image ready for next instructions
-RUN apk add --update redis
+# Install Redis without keeping the package index in the final image.
+RUN apk add --no-cache redis
 # Layer 2
 
-# specify a command to run on container startup
-# get image from last step
-# create a container from it
-# tell it the command to run when it starts
+# Specify the default command to run when a container starts.
 CMD ["redis-server"]
 # Layer 3
 
 
 # FROM Base_Image:Tag
-# RUN some commands to customize the image
+# RUN commands customize the image
 # CMD ["executable","param1","param2"]

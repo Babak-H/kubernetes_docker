@@ -1,29 +1,24 @@
-# install node:
-
-# set MONGO_DB_USERNAME=admin
-# set MONGO_DB_PWD=password
-
-# create /home/app folder
-
-# copy current folder contents to /home/app folder
-
-# start the app with: "node server.js"
-# layer 1
+# Use Node.js as the base image.
 FROM node:latest
+# Layer 1
 
-# set environment variables inside the running container *at runtime*
-# layer 2
+# Set environment variables that will be available inside the container.
 ENV MONGO_DB_USERNAME=admin \
     MONGO_DB_PWD=password
+# Layer 2
 
-# you can have multiple RUN commands
-# layer 3
-RUN mkdir -p /home/app
+# Any command after this runs relative to this path inside the container.
+# WORKDIR creates the directory if needed and makes later paths cleaner.
+WORKDIR /home/app
+# Layer 3
 
-# layer 4
-COPY . /home/app
+# Copy files from this folder on the host into the current container directory.
+COPY . .
+# Layer 4
 
-# layer 5
-CMD ["node", "/home/app/server.js"]
+# Start the app with node server.js when the container starts.
+CMD ["node", "server.js"]
+# Layer 5
 
-# all dockerfile commands: ADD COPY ENV EXPOSE FROM LABEL STOPSIGNAL USER VOLUME WORKDIR ONBUILD
+# Common Dockerfile instructions include:
+# ADD, COPY, CMD, ENTRYPOINT, ENV, EXPOSE, FROM, LABEL, RUN, USER, VOLUME, and WORKDIR.
