@@ -1,67 +1,54 @@
-# Create a Pod called redis-storage with image: redis:alpine with a Volume of type emptyDir that lasts for the life of the Pod.
+---
+# Create a Pod called redis-storage with image: redis:alpine with a Volume of type emptyDir that "lasts for the life of the Pod"
+
 apiVersion: v1
 kind: Pod
 metadata:
   name: redis-storage
   namespace: redis-ns
 spec:
+  securityContext:
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
   volumes:
+    # emptyDir volume: temporary storage that exists for the lifetime of the Pod.
     - name: temp-vol
-      emptyDir: {}  # emptyDir: {} is correct — it creates a temporary volume that lasts as long as the Pod exists.
+      emptyDir: {}
   containers:
     - name: redis-storage
-      image: redis:alpine
+      image: redis:7.2.5-alpine
       volumeMounts:
         - name: temp-vol
-          mountPath: "/data/redis"
+          mountPath: /data/redis
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
 
 ---
-# Pod with Volumes defined inside it
- 
-apiVersion: v1
-kind: Pod
-metadata:
-  name: num-generator
-spec:
-  containers:
-    - name: alpine
-      image: alpine
-      command: ["/bin/bash", "-c"]
-      args: ["shuf -i 0-100 -n 1 >> /opt/number.out;"]
-      volumeMounts:
-        # where to put the data inside the container pod
-        - mountPath: /opt
-          # name of the volume
-          name: data-volume
-  volumes:
-    # this is local volume, its local only to this Node (host machine)
-    - name: data-volume
-      # type of Volume is hostPath
-      hostPath:
-        path: /data  # /data directory exists on the host node
-        type: Directory
-    # this is remote volume on EBS volume on AWS
-    - name: data-volume-ebs
-      # type of volume is awsElasticBlockStore
-      awsElasticBlockStore:
-        volumeID: "******"
-        fsType: ext4
-
-
----
-# this is a volume that persists even after the pod is killed and keeps the data (legacy code, now its better to use storage classes)
+# PersistentVolume backed by an AWS EBS volume.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: pv-vol1
 spec:
-  accessModes:
-    - ReadWriteOnce
-  # what happens when volume is released from PVC
-  persistentVolumeReclaimPolicy: Retain # this is the default
   capacity:
     storage: 1Gi
-  # here we mention type of the volume
+  accessModes:
+    - ReadWriteOnce
+  # what happens when volume is release from the PVC
+  persistentVolumeReclaimPolicy: Retain
   awsElasticBlockStore:
     volumeID: "*******"
     fsType: ext4
@@ -72,54 +59,113 @@ kind: PersistentVolumeClaim
 metadata:
   name: myclaim
 spec:
-  # this will choose only PV with same access mode
+  # will only choose PV with the same access mode
   accessModes:
     - ReadWriteOnce
-  # PVC size should be same or smaller than PV but NOT bigger
+  # The requested size must be less than or equal to a matching PV capacity.
   resources:
     requests:
       storage: 500Mi
 
 ---
+# Pod with AWS EBS volume 
 apiVersion: v1
 kind: Pod
 metadata:
   name: mypod
 spec:
+  securityContext:
+    fsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
   volumes:
     - name: mypv
       persistentVolumeClaim:
         claimName: myclaim
   containers:
     - name: myfrontend
-      image: nginx
+      image: nginxinc/nginx-unprivileged:1.25-alpine
+      ports:
+        - containerPort: 8080
       volumeMounts:
-        - mountPath: "/var/www/html"
-          name: mypv
-
-
-# What type of volume is used to mount a Microsoft Azure Data Disk into a Pod? => azureDisk
-# What volume type is to be used to mount a directory from the node on which the pod is running? => hostPath
-# What volume type is used to store data in a Pod only as long as that Pod is running on that node? When the Pod is deleted the files are to be deleted as well. => emptyDir
-# 'fc volume' type => An fc volume type allows an existing fibre channel block storage volume to mount in a Pod. You can specify
-  # single or multiple target worldwide names (WWNs) using the parameter targetWWNs in your Volume configuration. If multiple WWNs are specified,
-  # targetWWNs expect that those WWNs are from multi-path connections.
+        - name: mypv
+          mountPath: /usr/share/nginx/html
+      securityContext:
+        runAsUser: 101
+        runAsGroup: 101
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi
 
 ---
-# PV with hostPath
+# Pod with hostPath 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: num-generator
+spec:
+  securityContext:
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: alpine
+      image: alpine:3.20
+      command: ["/bin/sh", "-c"]
+      args: ["shuf -i 0-100 -n 1 >> /opt/number.out"]
+      volumeMounts:
+        - name: data-volume
+          mountPath: /opt
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 25m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
+  volumes:
+    - name: data-volume
+      # hostPath uses a directory from the node (host machine that kubernetes pods run on) where the Pod is scheduled.
+      hostPath:
+        path: /data
+        type: Directory
 
+# Volume types:
+# azureDisk mounts a Microsoft Azure Data Disk into a Pod.
+# hostPath mounts a directory from the node where the Pod is running.
+# emptyDir {} stores data only while the Pod exists on that node.
+# fc mounts an existing Fibre Channel block storage volume.
+
+---
+# PersistentVolume backed by a hostPath directory.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: pv-log
 spec:
-  persistentVolumeReclaimPolicy: Retain
-  accessModes:
-    - ReadWriteMany
   capacity:
     storage: 100Mi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
   hostPath:
     path: /pv/log
+    # Mount the directory at /pv/log on the node. If it doesn't exist yet, create it (including any missing parent directories) with permissions 0755, owned by the same group and user running the kubelet.
+    type: DirectoryOrCreate
 
 ---
 apiVersion: v1
@@ -128,23 +174,23 @@ metadata:
   name: claim-log-1
 spec:
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   resources:
     requests:
       storage: 50Mi
 
-# even when your PVC is smaller than PV, when you claim it you get the whole size of PV
-# if you try to delete a PVC while it is being used by a deployment, it will be stuck at "Terminating" state
+# Even when the PVC request is smaller than the PV, the PVC binds to the whole PV
+# A PVC used by a running Pod can stay in Terminating until the Pod releases it
 
 ---
-# we can create a storage class object instead of PV for cloud volumes, we don't define the size here. this is also called dynamic provisioning
+# StorageClass for dynamic AWS EBS provisioning.
 
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: ebs-sc
 provisioner: ebs.csi.aws.com
-# do not create the PV when PVC calims it, do it when PV is bounding to a Pod
+# WaitForFirstConsumer => the PV is not provisioned or bound until a Pod uses the PVC.
 volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: io1
@@ -159,7 +205,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  # persistent volume claim accesses the above created Storage class
+  # connect to the storageClass that is named "ebs-sc"
   storageClassName: ebs-sc
   resources:
     requests:
@@ -168,20 +214,24 @@ spec:
 #  Normal  WaitForFirstConsumer  5s (x8 over 97s)  persistent-volume-controller  waiting for first consumer to be created before binding => this means no pod is consuming the PVC
 # this happens when we have "volumeBindingMode: WaitForFirstConsumer" in SC, so it won't bind unless PVC is connected to pod
 
+
+####################
+# PV-PVC for MongoDB
+####################
 ---
+# we can have a PV from an specific type of StorageClass
 apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: local-storage
 spec:
-  # storage class name is to make sure specific PV connects to specific PVC, when several PVs have correct accessMode and capacity
   storageClassName: mylocalstorage
   capacity:
-    storage: 5Gi  # this should be same as or bigger than the PersistentVolumeClaim
+    storage: 6Gi
   accessModes:
     - ReadWriteOnce
   hostPath:
-    path: "/mnt/new/directory/structure/"
+    path: /mnt/new/directory/structure
     type: DirectoryOrCreate
 
 ---
@@ -190,7 +240,7 @@ kind: PersistentVolumeClaim
 metadata:
   name: mongo-pvc
 spec:
-  storageClassName: mylocalstorage  # this will connect PVC and  PV together through class name (binding)
+  storageClassName: mylocalstorage
   accessModes:
     - ReadWriteOnce
   resources:
@@ -198,14 +248,15 @@ spec:
       storage: 5Gi
 
 
-# deployment using PVC and PV
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: postgress-Deployment
+  name: postgres-deployment
+  labels:
+    component: postgres
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       component: postgres
@@ -214,27 +265,54 @@ spec:
       labels:
         component: postgres
     spec:
+      securityContext:
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+
       volumes:
         - name: postgres-storage
-          persistenceVolumeClaim:
+          persistentVolumeClaim:
             claimName: postgres-storage-claim
+
       containers:
         - name: postgres
-          image: fhsinchy/notes-postgres
+          image: fhsinchy/notes-postgres:1.0.0
           ports:
             - containerPort: 5432
           volumeMounts:
-            - mountPath: /var/lib/postgres/data  # the directory where this volume will be mounted
-              subPath: postgres # directory that will be created inside the volume MountPath
-              name: postgres-storage
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+              # subPath tells Kubernetes to mount only a specific subdirectory of the volume into the container, rather than the volume root
+              # without subPath => volume root  →  /var/lib/postgresql/data
+              # with subPath =>    volume root/postgres/  →  /var/lib/postgresql/data
+              # Only the postgres/ subdirectory inside the volume is mounted there
+              subPath: postgres
           env:
-            - name: POSTGRESS_DB
-              value: noteDB
-            - name: POSTGRESS_PASSWORD
-              value: 63eaQB9wtLqmNBpg
+            - name: POSTGRES_DB
+              value: notesdb
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
 
 ---
-# Persistentvolume with NodeAffinity
+# PersistentVolume with node affinity
 
 apiVersion: v1
 kind: PersistentVolume
@@ -259,12 +337,10 @@ spec:
               values:
                 - example-node
 
-
-# several PVC resources can connect to the same StorageClass object for PV creation
+# Several PVCs can reference the same StorageClass for dynamic PV provisioning
 
 ---
-# Pod with Configmap as Volume
-
+# Pod with a ConfigMap mounted as a volume
 apiVersion: v1
 kind: Pod
 metadata:
@@ -272,53 +348,90 @@ metadata:
   labels:
     run: mypod-0
 spec:
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
   volumes:
+    # since we reference the configMap itself, everything inside it will be mounted to the volume
     - name: config-dir
       configMap:
         name: bb-configmap
   containers:
     - name: busybox-container-0
-      image: busybox
+      image: busybox:1.36.1
+      command: ["/bin/sh", "-c"]
+      args: ["sleep 3600"]
       volumeMounts:
-        - mountPath: /etc/config
-          name: config-dir
+        - name: config-dir
+          mountPath: /etc/config
+          readOnly: true
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 25m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
 
-
-# pod with Secret as Volume
 ---
-kind: Pod
+# Pod with a Secret mounted as a volume
 apiVersion: v1
+kind: Pod
 metadata:
-  name: mypo-1
+  name: mypod-1
 spec:
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
   volumes:
     - name: secret-dir
       secret:
         secretName: bb-secret
   containers:
     - name: busybox-container-1
-      image: busybox
+      image: busybox:1.36.1
+      command: ["/bin/sh", "-c"]
+      args: ["sleep 3600"]
       volumeMounts:
-        - mountPath: /etc/secret
-          name: secret-dir
+        - name: secret-dir
+          mountPath: /etc/secret
           readOnly: true
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 25m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
 
 ---
 # Create a new PersistentVolumeClaim: Name: pv-volume | Class: csi-hostpath-sc | Capacity: 10Mi
-# Create a new Pod which mounts the PersistentVolumeClaim as a volume: Name: web-server, Image: nginx, Mount path: /usr/share/nginx/html, ReadWriteOnce access on the volume.
+# Create a new Pod which mounts the PVC as a volume: Name: web-server, Image: nginx, Mount path: /usr/share/nginx/html, ReadWriteOnce access on the volume.
 # using kubectl edit or kubectl patch expand the PersistentVolumeClaim to a capacity of 70Mi and record that change.
 
 apiVersion: v1
 kind: PersistentVolumeClaim
-metadata: 
+metadata:
   name: pv-volume
 spec:
   accessModes:
-  - ReadWriteOnce 
+    - ReadWriteOnce
+  storageClassName: csi-hostpath-sc
   resources:
     requests:
-      storage: 10Mi  # edit this to 70Mi
-  storageClassName: csi-hostpath-sc  # since we defined a storageClass, there is no need here to manually create a PersistentVolume
+      storage: 10Mi
 
 ---
 apiVersion: v1
@@ -326,17 +439,38 @@ kind: Pod
 metadata:
   name: web-server
 spec:
+  securityContext:
+    fsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
   volumes:
-  - name: pv-volume
-    persistentVolumeClaim:
-      claimName: pv-volume
+    - name: pv-volume
+      persistentVolumeClaim:
+        claimName: pv-volume
   containers:
-  - name: web-server
-    image: nginx
-    volumeMounts:
-    - mountPath: /usr/share/nginx/html
-      name: pv-volume
+    - name: web-server
+      image: nginxinc/nginx-unprivileged:1.25-alpine
+      ports:
+        - containerPort: 8080
+      volumeMounts:
+        - name: pv-volume
+          mountPath: /usr/share/nginx/html
+      securityContext:
+        runAsUser: 101
+        runAsGroup: 101
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi
 
-# k edit pvc pv-volume --record   (goes inside the pod via vim to edit it directly)
-  # or
-# k patch pvc pv-volume '{"spec":{"resources":{"requests":{"storage":"70Mi"}}}}' --record
+
+# kubectl edit pvc pv-volume   (goes inside the pod via vim to edit it directly)
+# or
+# kubectl patch pvc pv-volume -p '{"spec":{"resources":{"requests":{"storage":"70Mi"}}}}'

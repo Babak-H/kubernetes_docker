@@ -1,14 +1,37 @@
+# Job and CronJob examples for one-time and scheduled work, for the Job and CronJob, the "restartPolicy" should be set to "Never"
+
+---
 # this pod will do the math operation, go to completed state, restart and do it again until restart threshold is reached
+# since here restart Threshold is zero, it will stay at completed
 
 apiVersion: v1
 kind: Pod
 metadata:
   name: math-pod
 spec:
+  # If the command succeeds, the Pod goes to Completed
+  # If the command fails, the Pod goes to Failed
+  restartPolicy: Never
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
   containers:
     - name: math-add
-      image: ubuntu
+      image: ubuntu:24.04
       command: ["expr", "3", "+", "2"]
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 25m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
 
 ---
 apiVersion: batch/v1
@@ -16,54 +39,83 @@ kind: Job
 metadata:
   name: math-add-job
 spec:
-  completions: 3 # we need 3 successful operations before job is finished
-  parallelism: 2 # how many jobs to run at same time, default is 1
-  # This is so the job does not quit before it succeeds (for at least 25 tries)
-  backoffLimit: 25
-  activeDeadlineSeconds: 20 # if the task is not complete in 20sec the job should fail and pod terminate
-  # this section is same as Pod
+  completions: 3 # Require 3 successful Pods before the Job is complete
+  parallelism: 2 # Run up to 2 Pods at the same time
+  backoffLimit: 25 # Retry failed Pods up to 25 times before marking the Job failed
+  activeDeadlineSeconds: 20 # Fail the Job if it runs longer than 20 seconds
   template:
     spec:
+      restartPolicy: Never
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: math-add
-          image: ubuntu
+          image: ubuntu:24.04
           command: ["expr", "3", "+", "2"]
-      restartPolicy: Never # Jobs SHOULD HAVE this, so it will not repeat the job after it is done
+          securityContext:
+            runAsUser: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
 
-# how to get job's results in logs => k logs job/math-add-job
+# Get Job logs:
+# kubectl logs job/math-add-job
 
 ---
-# k create job whalesay --image=docker/whalesay --dry-run=client -o yaml > job.yaml
-# vi job.yaml
+# kubectl create job whalesay --image=docker/whalesay:6.1.4 --dry-run=client -o yaml > job.yaml
 
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: whalesay
 spec:
-  parallelism: 1 # default
+  parallelism: 1
   completions: 10
   backoffLimit: 6
   template:
     spec:
+      restartPolicy: Never
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: whalesay
-          image: docker/whalesay
+          image: docker/whalesay:6.1.4
           command: ["/bin/sh", "-c", "cowsay I am going to ace CKAD"]
-      restartPolicy: Never
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
 
-# k get job whalesay
+# kubectl get job whalesay
 
 ---
-# CronJob
-
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: reporting-cron-job
 spec:
   # all cronJobs should have a schedule to run
-  schedule: "*/1 * * *"
+  schedule: "*/1 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
   # this section is same as Job
   jobTemplate:
     spec:
@@ -72,41 +124,40 @@ spec:
       backoffLimit: 10
       template:
         spec:
+          restartPolicy: Never
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: reporting-tool
-              image: reporting-tool
-          restartPolicy: Never
+              image: reporting-tool:1.0.0
+              securityContext:
+                runAsUser: 1000
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
 
----
-# k get cj
-# k get cronjob
-
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: throw-dice-cron-job
-spec:
-  schedule: "30 21 * * *"
-  jobTemplate:
-    spec:
-      completions: 3
-      parallelism: 3
-      backoffLimit: 10
-      template:
-        spec:
-          containers:
-            - name: throw-twice
-              image: kodekloud/throw-dice
-          restartPolicy: Never
+# kubectl get cronjob
+# short version => kubectl get cj
 
 # Create a job with the image busybox that executes the command 'echo hello;sleep 30;echo world'
-# when running "echo", we need to put "/bin/sh -c" behind the "echo" command
-# k create job busyjob --image=busybox -- /bin/sh -c 'echo hello;sleep 30;echo world'
+# kubectl create job busyjob --image=busybox:1.36.1 -- /bin/sh -c 'echo hello;sleep 30;echo world'
 
 ---
 # Create a cron job with image busybox that runs every minute and writes 'date; echo Hello from the Kubernetes cluster' to standard output. The cron job should be terminated if it takes more than
 # 17 seconds "to start execution" after its scheduled time
 # The cron job also should be terminated if it successfully starts but takes more than 12 seconds to complete execution.
+
+# startingDeadlineSeconds => limits how late the Job may start after its scheduled time
+# activeDeadlineSeconds => limits how long the Job may run after it starts
 
 apiVersion: batch/v1
 kind: CronJob
@@ -114,20 +165,33 @@ metadata:
   name: busybox
 spec:
   schedule: "*/1 * * * *"
-  startingDeadlineSeconds: 17 # cron job should be terminated if it takes more than 17 seconds "to start execution" after its scheduled time
+  startingDeadlineSeconds: 17
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
   jobTemplate:
-    metadata:
-      name: busybox
     spec:
-      activeDeadlineSeconds: 12 ##
+      activeDeadlineSeconds: 12
       template:
         spec:
+          restartPolicy: Never
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
           containers:
-            - command:
-                [
-                  "/bin/sh",
-                  "-c",
-                  "date; echo Hello from the Kubernetes cluster",
-                ]
-              image: busybox
-              name: busybox
+            - name: busybox
+              image: busybox:1.36.1
+              command: ["/bin/sh", "-c", "date; echo Hello from the Kubernetes cluster"]
+              securityContext:
+                runAsUser: 1000
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi

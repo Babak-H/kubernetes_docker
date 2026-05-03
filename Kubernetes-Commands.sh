@@ -1,6 +1,9 @@
-##### Installations ##########################################################################
+#!/usr/bin/env bash
 
-# install homebrew (brew) on macOs
+#####################################################################################
+##### Installations #################################################################
+
+# install Homebrew (brew) on macOS
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
 # install minikube
@@ -8,7 +11,7 @@ brew update
 brew install hyperkit
 brew install minikube
 
-# install kubectl on MacOS:
+# install kubectl on macOS:
 curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/arm64/kubectl"
 chmod +x ./kubectl
 sudo mv ./kubectl /usr/local/bin/kubectl
@@ -25,20 +28,21 @@ kind create cluster
 brew install helm
 helm --version
 
-# on linux
+# on Linux
 sudo snap install helm
 # or
-sudo snap install helm --class
+sudo snap install helm --classic
 
-# on ubuntu
-curl https://baltocdn.com/helm/signing.asc | apt-key add -
-apt-get install apt-transport-https --yes
-echo "deb https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list
-apt-get update
-apt-get install helm
+# on Ubuntu
+curl -fsSL https://baltocdn.com/helm/signing.asc | sudo gpg --dearmor -o /usr/share/keyrings/helm.gpg
+sudo apt-get install apt-transport-https --yes
+echo "deb [signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+sudo apt-get update
+sudo apt-get install helm
 
 # make sure it works properly
-kubectl minikube
+kubectl version --client
+minikube version
 
 # start it
 minikube start
@@ -55,23 +59,24 @@ kubectl version
 # add ingress to minikube
 minikube addons enable ingress
 
-# how to run metric server on kubernetes cluster
-# metrics server is just a pod that its job is measuring the hardware usage of cluster objects
+# how to run metrics-server on a Kubernetes cluster
+# metrics-server collects CPU and memory metrics from nodes and pods.
 # show all addons
 minikube addons list
 # enable metrics server addon for our cluster
 minikube addons enable metrics-server
 # or
 git clone https://github.com/kodekloudhub/kubernetes-metrics-server.git
-cd kubernetes-metrics-server/
+cd kubernetes-metrics-server/ || exit
 kubectl create -f .
 
 # find what ip address the kubernetes master is running at
-kubectl cluster-info 
+kubectl cluster-info
 
 # In Kubernetes versions : X.Y.Z  1.2.2
 # Where X=1 stands for major, Y=2 stands for minor and Z=2 stands for patch version.
 
+#####################################################################################
 ##### Shortcuts ##########################################################################
 
 alias k=kubectl
@@ -87,16 +92,16 @@ vim ~/.vimrc
 # set shiftwidth=2
 # set tabstop=2
 
-po      POD
-rs      ReplicaSet
-deploy  Deployment
-svc     Service
-ns      NameSpace
-netpol  NetworkPolicies
-pv      PersistentVolume
-pvc     Persistent Volume Claim
-sa      Service Account
-cm      ConfigMap
+# po      POD
+# rs      ReplicaSet
+# deploy  Deployment
+# svc     Service
+# ns      NameSpace
+# netpol  NetworkPolicies
+# pv      PersistentVolume
+# pvc     Persistent Volume Claim
+# sa      Service Account
+# cm      ConfigMap
 
 # kubectl [command] [TYPE] [NAME] -o <OUTPUT_FORMAT>
 
@@ -115,11 +120,12 @@ k get all | grep AppName
 k get all | grep mongodb
 
 # get all namespaced resources
-k api-resources # all resources availabel
-k api-resources --namespaced -o=name  # get name of all namespaced resources
+k api-resources # all resources available
+k api-resources --namespaced -o=name  # get the names of all namespaced resources
 
-CTRL+R # you can write starting part of the command, terminal will search and find closest one from history, press enter to re-execute that command
+# CTRL+R: type the start of a previous command, search shell history, and press Enter to re-run it.
 
+#####################################################################################
 ##### POD ##########################################################################
 
 # show all pods
@@ -136,11 +142,11 @@ k get pod webapp-color -o yaml > pod.yaml  # get the pod and save it as yaml
 vi pod.yaml  # edit the env variable in the config file
 k replace -f pod.yaml --force  # instead of deleting and recreating, replace the pod with new one
 
-# after editing a existing pod even if its unsuccessful, it gives you a version of the file in /tmp folder, u can use it
+# after editing an existing pod, even if it is unsuccessful, kubectl saves a version of the file in /tmp that you can use.
 # this will replace the pod that you wanted to edit
 kubectl replace -f /tmp/kubectl-edit-XXXXX.yaml --force
 
-# find all the pods that have labels red or orange or blue, and only show their "Name" volumn
+# find all pods that have color labels red, orange, or blue, and only show their "Name" column.
 k get po -n rep -l "color in (red,orange,blue)" -o wide | grep -v Name | awk '{print $1}' > /home/ubuntu/pod001
 
 # --dry-run: By default, as soon as the command is run, the resource will be created. If you simply want to test your command, use the --dry-run option. This will not create the resource. Instead, tell you whether the resource can be created and if your command is right.
@@ -176,12 +182,12 @@ k run busybox --image=busybox --command -- wget -qO my-app-svc
 k logs busybox  # the downloaded html from nginx deployments should be visible
 
 # get how many lines we have in the logs combined for all the pods that have the tag "app=prod"
-k logs -n ca2 -l app=prod | wc -l  > /home/ubuntu/res.txt 
+k logs -n ca2 -l app=prod | wc -l  > /home/ubuntu/res.txt
 
 # Enabling debug logs is done by appending --verbosity=debug to the command of the main container in the deployment k8s yaml:
 kubectl edit deployment vt-ledger-balances-processor
 # add "- --verbosity=debug" under "spec.template.spec.containers[0].command"
-# Then rollout restart the deployment: 
+# Then rollout restart the deployment:
 kubectl rollout restart deployment vt-ledger-balances-processor
 
 # show details of a running pod
@@ -212,9 +218,9 @@ k exec nginx -- env
 
 k run nginx --image=nginx
 k run nginx --image=nginx -- /bin/sh -c 'echo hello world'
-k run nginx --image=nginx --restart=onFailure --port=80 -n mynamespace --env=HOSTNAME=local --labels=bu=finance,ENV=dev --requests='cpu=100m,memory=256Mi' --limits='cpu=200m,memory=512Mi' --dry-run -o yaml
+k run nginx --image=nginx --restart=OnFailure --port=80 -n mynamespace --env=HOSTNAME=local --labels=bu=finance,ENV=dev --requests='cpu=100m,memory=256Mi' --limits='cpu=200m,memory=512Mi' --dry-run=client -o yaml
 
-k run nginx --image=nginx:alpine --dry-run -o yaml > nginx.yaml
+k run nginx --image=nginx:alpine --dry-run=client -o yaml > nginx.yaml
 # this will add the port 80 on pod (as containerPort) but won't create the service
 k run custom-nginx --image=nginx --port=8080
 
@@ -239,7 +245,7 @@ k cp -n default my-pod:/path/to/file.txt my-file.txt
 # kubectl cp -n <namespace> <source> <pod-name>:<path>
 k cp -n default file.txt my-pod:/path/to/file.txt
 
-k cp -n vault-operators crown-operator-XXXXX:/var/run/kubernetes.io/serviceaccount/data/ca.crt  ./cert_operator-sa 
+k cp -n vault-operators crown-operator-XXXXX:/var/run/kubernetes.io/serviceaccount/data/ca.crt  ./cert_operator-sa
 
 k cp -n 105250-vault-operators ./script.sh vault-operator-tqdcf:/tmp/ -c installer-prerequisite-configuration-container
 
@@ -249,7 +255,7 @@ k cp default/busybox:/etc/passwd /root/passwd # since we are copying a file we s
 
 # this command will make the file inside the local machine, but i want it to be created inside the same pod
 kubectl exec vt-tools-repub-cron-28941778-65k7z -n 432235-vt-operators -- ./scripts/vt_list_postings_failures.sh > /tmp/temp_ids.txt
-# To create a file inside the same pod where the script is executed, you need to redirect the output within the context of the pod itself. You can achieve this by including 
+# To create a file inside the same pod where the script is executed, redirect the output within the context of the pod itself. You can do this by including
 # the redirection as part of the command executed by kubectl exec
 kubectl exec vt-tools-repub-cron-28941778-65k7z -n 432235-vt-operators -- sh -c './scripts/vault_list_post_postings_failures.sh > /tmp/temp_ids.txt'
 # sh -c: This tells the shell to execute the following string as a command. It's necessary because the redirection (>) needs to be interpreted by the shell within the pod.
@@ -257,7 +263,7 @@ kubectl exec vt-tools-repub-cron-28941778-65k7z -n 432235-vt-operators -- sh -c 
 
 
 # create a busybox pod and wget the above nginx pod's main page
-k run busybox --image=busybox --command -- wget -o- NGNIX_IP_ADDRESS:PORT
+k run busybox --image=busybox --command -- wget -O- NGINX_IP_ADDRESS:PORT
 
 # replicaSet doesn't automatically delete older pods, we have to delete all older pod with wrong name manually
 # delete all of them based on their tag
@@ -272,7 +278,7 @@ k annotate pod -l app=v2 owner=marketing
 k label pod nginx{1..3} app-
 
 # add several labels to a kubernetes serviceaccount via commandline
-kubectl label serviceaccount <serviceaccount-name> -n <namespace> key1=value1 key2=value2 key3=value3
+kubectl label serviceaccount SERVICEACCOUNT_NAME -n NAMESPACE key1=value1 key2=value2 key3=value3
 kubectl label serviceaccount my-serviceaccount -n default env=production team=devops
 
 # Annotate pods nginx1, nginx2, nginx3 with "description='my description'" value
@@ -280,7 +286,7 @@ kubectl label serviceaccount my-serviceaccount -n default env=production team=de
 k annotate pod nginx{1..3} description="my description"
 
 # k annotate --overwrite => overwrite the existing annotation with same name
-# tmcomponent => resource type (its a CRD type)
+# tmcomponent => resource type (it is a CRD type)
 # observability => name of the tmcomponent resource object
 # tmcomponent.tmachine.io/continuous-reconcile=true => key and value for annotation
 k annotate --overwrite tmcomponent observability tmcomponent.tmachine.io/continuous-reconcile=true
@@ -332,7 +338,7 @@ k logs busybox # to see the results of the command
 
 # this will cause the pod to crashloop backoff
 k run busybox --image=busybox --command -- /bin/sh -c echo "hello"
-# but this will work, after -C we need "" or ''
+# but this will work; after sh -c, quote the command with "" or ''.
 k run busybox1 --image=busybox --command -- /bin/sh -c 'echo "hello"'
 
 # In this command, echo 'hi' is treated as an argument to the default entry point of the nginx image. The nginx image has a default entry point that starts the Nginx server,
@@ -340,20 +346,21 @@ k run busybox1 --image=busybox --command -- /bin/sh -c 'echo "hello"'
 # fail to start or exit immediately.
 k run nginx --image=nginx -- echo 'hi'
 
-# In this command, the --command option tells Kubernetes to override the default entry point of the container with the command specified after -- , This means that instead 
-# of starting the Nginx server, the container will execute echo 'hi' as the main command. As a result, the container will start, execute the echo 'hi' command, print 
+# In this command, the --command option tells Kubernetes to override the default entry point of the container with the command specified after -- , This means that instead
+# of starting the Nginx server, the container will execute echo 'hi' as the main command. As a result, the container will start, execute the echo 'hi' command, print
 # "hi" to the standard output, and then exit.
 k run nginx --image=nginx --command -- echo 'hi'
 
-# crate a pod that echo's hello world and does not restart and have it deleted when it completes
+# create a pod that echoes "hello world", does not restart, and is deleted when it completes.
 k run busybox --image busybox -it --rm --restart=Never -- /bin/sh -c 'echo hello world'
 k get po
 
-# list all pods and its nodes
+# list all pods and their nodes
 kubectl get pod -o wide
 kubectl get pods --all-namespaces
 kubectl get pod --all-namespaces -o json | jq '.items[] | .spec.nodeName + " " + .status.podIP'
 
+#####################################################################################v
 ##### ReplicaSet ##########################################################################
 
 k get replicaset new-replicaset -o wide
@@ -366,11 +373,11 @@ k scale rs new-replicaset --replicas=5
 # show all replica sets
 k get rs
 
-# if a deployment or replicasSet is not having pods ready
-# check the events or name of the image (there might be a typo caused imagePulling issues)
+# if a Deployment or ReplicaSet does not have ready pods, check events and image names for image pull issues.
 k describe rs rs-d23423
 k edit rs rs-d23423 # correct the image name
 
+#####################################################################################
 ##### Deployment ##########################################################################
 
 # show all deployments
@@ -381,8 +388,8 @@ k create deploy myDeploy --image=myImage
 k create deploy nginx-depl --image=nginx
 k create deploy mongo-depl --image=mongo
 
-k create deploy nginx --image=nginx --dy-run -o yaml
-k create deploy nginx --image=nginx --dy-run -o yaml > nginx-deploy.yaml
+k create deploy nginx --image=nginx --dry-run=client -o yaml
+k create deploy nginx --image=nginx --dry-run=client -o yaml > nginx-deploy.yaml
 k apply -f nginx-deployment.yaml
 
 k create deploy webapp --image=kodekloud/webapp --replicas=3
@@ -397,12 +404,12 @@ k get deploy nginx-depl -o yaml > nginx-deployment.yaml
 k delete deploy nginx-depl
 k delete -f nginx-deployment.yaml
 
-# with deployments you can easily edit any field/property of the pod template, since the pod template is a child of the deployment specification
-# with every change the deployment automatically deletes and creates a new pod with new changes.
+# with Deployments you can edit fields in the pod template, since the pod template is part of the Deployment specification.
+# With every pod-template change, the Deployment creates a new ReplicaSet and rolls out new Pods.
 # so we can edit anything inside the deployment via "k edit deploy ..." command
 
 # update image container of a deployment
-k set image <resource-type>/<resource-name> <container-name>=<image-name-with-tag>
+k set image RESOURCE_TYPE/RESOURCE_NAME CONTAINER_NAME=IMAGE_NAME_WITH_TAG
 k set image deployment/client-deployment client=fhsinchy/notes-client:edge
 
 k set image deploy cloudforce -n fre nginx=nginx:1.19.0-perl --record
@@ -412,7 +419,7 @@ k scale deploy nginx --replicas=5
 # instead of deleting a deployment, we can just scale it to 0 and then later increase the size
 kubectl scale deployment prometheus-operator-105250-core-vault -n 105250-core-vault-mon --replicas=0
 
-# get deployment/pod's logs 
+# get Deployment or Pod logs
 k logs my-depl
 k logs -f my-depl
 
@@ -440,15 +447,15 @@ k expose deploy foo --port 6262 --target-port 8080
 
 # To access a Kubernetes pod via a browser, you typically need to expose the pod using a Kubernetes Service. This service can be of type NodePort, LoadBalancer, or Ingress,
 # depending on your cluster setup and requirements
-kubectl expose pod <pod-name> --type=NodePort --port=<port>
-kubectl get service <pod-name>
-# You can now access the application running in your pod by navigating to http://<node-ip>:<node-port> in your browser. Replace <node-ip> with the IP address of any of your 
+kubectl expose pod POD_NAME --type=NodePort --port=PORT
+kubectl get service POD_NAME
+# You can now access the application running in your pod by navigating to http://<node-ip>:<node-port> in your browser. Replace <node-ip> with the IP address of any of your
 # cluster nodes and <node-port> with the NodePort you obtained in the previous step.
 
 # If you're running Kubernetes on a cloud provider, you might prefer using a LoadBalancer service type, which will provide an external IP address. Alternatively, for more complex routing, you can set up an Ingress resource.
 # Remember that exposing a pod directly might not be the best practice for production environments. It's usually better to expose a deployment or a set of pods using a service to ensure high availability and load balancing.
 
-# copy file from pod/deployment to local machine
+# copy file from Pod to local machine
 k cp default/postgresl-deploy:/home/backup/db ./Desktop/mydb1.dmp
 
 # deployment does NOT have --command flag, use -- instead
@@ -460,21 +467,22 @@ k label deployment myDeployment myLabelKey=myLabelValue
 # But this would only add the label to .metadata.labels. I would like to add a label to .spec.template.metadata.labels.
 
 # This should be possible using the kubectl patch command. The following patch file would add a new label to the spec.template.metadata.labels property
-spec:
-  template:
-    metadata:
-      labels:
-        myLabelKey: myLabelValue
+# spec:
+#   template:
+#     metadata:
+#       labels:
+#         myLabelKey: myLabelValue
 
-k patch deployment myDeployment --patch "$(cat patchfile.yaml)" 
+k patch deployment myDeployment --patch "$(cat patchfile.yaml)"
 
 # or
 k patch deployment myDeployment --patch '{"spec": {"template": {"metadata": {"labels": {"myLabelKey": "myLabelValue"}}}}}'
 
-# why adding a label to deployment does not add label to its pods?
-# Labels on deployments and pods created from deployments are separate. If you want the label(s) to appear on the pods you should add it to the pod template in the deployment
+# why adding a label to a Deployment does not add the label to its Pods?
+# Labels on Deployments and Pods created from Deployments are separate. If you want labels to appear on the Pods, add them to the pod template in the Deployment
 # definition, not the deployment itself.
 
+#####################################################################################
 ##### Service ##########################################################################
 
 k get service
@@ -482,32 +490,34 @@ k get svc
 
 k describe service nginx-service
 
-# this command will assign a public ip address to the service
+# this command opens the Service URL from minikube. For NodePort Services, minikube provides a reachable node IP and port.
 minikube service serviceName
 minikube service mongo-express-service
 
-# expose a pod via a service (clusterIP)
-k expose pod redis --port 6379 --name redis-service --dry-run -o yaml > svc.yaml
+# expose a pod via a Service (ClusterIP)
+k expose pod redis --port 6379 --name redis-service --dry-run=client -o yaml > svc.yaml
 
-# this does NOT expose any specific pod, since doesn't have a selector to choose the pod, therefore needs to be edited manually via yaml file
-k create svc clusterip redis --tcp=6379:6379 --dry-run -o yaml > my-svc.yaml
+# this does NOT expose any specific pod because it has no selector; edit the YAML file and add a selector manually.
+k create svc clusterip redis --tcp=6379:6379 --dry-run=client -o yaml > my-svc.yaml
 
-k create svc nodeport nginx --tcp=80:80 --node-port=3000 --dry-run -o yaml
+k create svc nodeport nginx --tcp=80:80 --node-port=30080 --dry-run=client -o yaml
 
-# we need to edit the service file and add the nodeport number manually
+# edit the Service file if you need to set a specific nodePort manually.
 k expose deploy frontend --type NodePort --name frontend-service --port 6262 --dry-run=client -o yaml > svc.yaml
 
 k expose deploy redis --port 6379 --name messaging-service -n marketing
 
-# this will add port 80 on pod and expose it as clusterIP service (same port 80 for both port and targetPort)
-k run nginx --image=nginx --port=80 expose
+# create an nginx Pod with containerPort 80, then expose it as a ClusterIP Service.
+k run nginx --image=nginx --port=80
+k expose pod nginx --port=80 --target-port=80
 
-# see all endpoint and ports that are exposed by services
+# see all endpoints and ports that are exposed by Services
 k get endpoints
 
-# this will shows the target port
+# this shows the target port
 k describe svc back-end
 
+#####################################################################################
 ##### ConfigMap / Secret ##########################################################################
 
 k apply -f config-file.yaml
@@ -531,12 +541,10 @@ k create cm special-config --from-literal=special.how=very --from-literal=specia
 k get secret
 
 # imperative command to create new object
-kubectl create # type of the object we are creating
-              secret # type of secret 
-                    generic  # for later reference in a pod config
-                            <SECRET-NAME> # add the secret information here in command-line
-                                          --from-literal  # key-value pair of the secret information
-                                                          PGPASSWORD=password123
+# kubectl create \                    # type of the object we are creating
+#   secret \                          # type of secret
+#   generic SECRET_NAME \             # for later reference in a pod config
+#   --from-literal PGPASSWORD=password123
 
 k create secret generic test-secret --from-file=secret.properties
 k create secret generic test-secret --from-literal=DB_HOST=mysql
@@ -552,13 +560,14 @@ k create secret generic db-secret-xxdf --from-literal=DB_HOST=sql01 --from-liter
 # Create and display a configmap from a .env file
 cat config.env
 
-    var1=val1
-    # this is a comment
-    var2=val2
-    # another comment
+# var1=val1
+# # this is a comment
+# var2=val2
+# # another comment
 
 k create cm my-cm --from-env-file=config.env
 
+#####################################################################################
 ##### NameSpace ##########################################################################
 
 # get all the available namespaces
@@ -569,16 +578,17 @@ k get ns
 k apply -f mysql-configmap.yaml -n dev
 
 k create ns apx-z99
-k create ns dev-ns --dry-run -o yaml > dev-ns.yaml
-k create ns test-ns --dry-run -o yaml
+k create ns dev-ns --dry-run=client -o yaml > dev-ns.yaml
+k create ns test-ns --dry-run=client -o yaml
 
-# gives you what current context on the cluster is set to
+# shows the current kubeconfig context
 k config current-context
 
 # change the default namespace
 k config set-context $(k config current-context) -n dev
 k get ns
 
+#####################################################################################
 ##### ServiceAccount ##########################################################################
 
 k create serviceaccount NAME
@@ -597,6 +607,7 @@ k config view sa
 # create a new SA called tiller in kube-system namespace
 k create serviceaccount -n kube-system tiller
 
+#####################################################################################
 ##### metrics-server ##########################################################################
 
 # shows how much memory/cpu each node is using
@@ -604,6 +615,7 @@ k top node
 # shows how much memory/cpu each pod is using
 k top pod
 
+#####################################################################################
 ##### Ingress ##########################################################################
 
 # how to see if the ingress controller is installed
@@ -622,7 +634,7 @@ k get pods -n ingress-nginx
 kubectl get pod -n kube-system | grep ingress
 
 # create ingress resource via command:
-k create ingress ingress-test --rule="wear.my-online-store.com/wear*=wear-service:80" 
+k create ingress ingress-test --rule="wear.my-online-store.com/wear*=wear-service:80"
 k create ingress ingress-test --rule="wear.my-online-store.com/wear*=wear-service:80" --dry-run=client -o yaml > my-ingress.yaml
 
 # create ingress for service "my-video-service" to be available from "http://ckad-mock-exam-solution.com:30093/video"
@@ -634,6 +646,7 @@ k create ingress pong -n ing-internal --rule="/hello=hello:5678" --dry-run=clien
 k get nodes -o wide
 curl -KL NODE-INTERNAL-IP/hello
 
+#####################################################################################
 ##### HPA Horizontal Pod Autoscaler ##########################################################################
 
 k apply -f my-hpa.yaml
@@ -653,6 +666,7 @@ k autoscale deploy php-apache --cpu-percentage=50 --min=1 --max=10
 
 k -n xx1 autoscale deploy eclipse --min=2 --max=4  --cpu-percentage=65
 
+#####################################################################################
 ##### PV and PVC ##########################################################################
 
 k get pv
@@ -661,7 +675,7 @@ k get storageclass
 # or
 k get sc
 
-# pvc can only be deleted when it's connection to the pod is cut
+# a PVC can only be fully deleted after no running Pod is using it.
 k delete pvc myclaim
 
 # check pvc events/status
@@ -672,10 +686,11 @@ k -n earth describe pvc earth-project-earthflower-pvc # event section is at the 
 kubectl get pvc -n 105250-core-vault | grep prometheus-postgres
 kubectl delete pvc -n 105250-core-vault prometheus-postgres-db-prometheus-postgres-{0..2}
 
+#####################################################################################
 ##### Rolling Updates ##########################################################################
 
 # get the progress of the update status
-k rollout status deploy ngnix-depl
+k rollout status deploy nginx-depl
 
 # Update the nginx image to nginx:1.19.8
 k edit deploy nginx  # change the .spec.template.spec.containers[0].image
@@ -701,14 +716,14 @@ k rollout status deploy my-deploy
 # shows all change history, each change is called "Revision"
 k rollout history deploy my-deploy
 
-# with --record flag, when u check rollout history, you can see each change's cause
+# with the --record flag, rollout history can show the command that caused each change.
 k create -f deploy-file.yaml --record
 
 # revision 1 is the first version where the deployment was created.
 # You can check the status of each revision individually by using the --revision flag:
 k rollout history deploy nginx --revision=1
 
-# rollback, this is also done to pods one by one,this goes directly to previous revision
+# rollback; the Deployment rolls Pods back gradually according to the rollout strategy.
 k rollout undo deploy my-test-deploy
 k rollout undo deploy nginx --to-revision=2
 
@@ -716,17 +731,19 @@ k rollout undo deploy nginx --to-revision=2
 # the pods will be restarted based on max surge and max unavailable values
 k rollout restart deploy -n 105250-core-vault
 
+#####################################################################################
 ##### Patch ##########################################################################
 
-k patch -n kube-system daemonset/istio-cni-node --type json -p='[{"op": "remove", "path": "/spec/template/spec/containers/0/resources/limits/cpu"}]' 
+k patch -n kube-system daemonset/istio-cni-node --type json -p='[{"op": "remove", "path": "/spec/template/spec/containers/0/resources/limits/cpu"}]'
 k patch -n kube-system clusterrole/istio-cni --type json -p='[{"op": "add", "path": "/rules/0/verbs", "value": ["get", "list", "watch", "delete"]}]'
 
 k set env -n kube-system daemonset/istio-cni-node REPAIR_DELETE_PODS="true" REPAIR_REPAIR_PODS="false"
 
-k get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/core-vt/deployments.apps/postings-processor/max_service_consumer_group_lag"{"kind":"MetricValueList","apiVersion":"custom.metrics.k8s.io/v1beta1","metadata":{},"items":[{"describedObject":{"kind":"Deployment", "name":"postings-processor","apiVersion":"apps/v1"},"metricName":"max_service_consumer_group_lag","timestamp":"2024-02-27T16:21:55Z","value":"0","selector":null}]}
-k get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/<VAULT_NS>/deployments.apps/<DEPLOYMENT_NAME>/max_service_consumer_group_lag" | jq
+k get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/core-vt/deployments.apps/postings-processor/max_service_consumer_group_lag" | jq
+k get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/VAULT_NS/deployments.apps/DEPLOYMENT_NAME/max_service_consumer_group_lag" | jq
 k get --raw "/apis/custom.metrics.k8s.io/v1beta1"
 
+#####################################################################################
 ##### Roles and RoleBindings ##########################################################################
 
 k get role
@@ -734,11 +751,11 @@ k get rolebinding
 k describe role developer
 k describe rolebinding devuser-developer-binding
 
-# check to see if you can do a operation
+# check whether you can perform an operation
 k auth can-i create deployments
 k auth can-i delete nodes
 
-# test if another user can do some operation (have to be admin to do this)
+# test if another user can perform an operation. You usually need admin permissions to impersonate another user.
 k auth can-i create deployments --as dev-user
 k auth can-i delete nodes --as dev-user
 k auth can-i create pods --as dev-user --namespace test
@@ -748,28 +765,28 @@ kubectl auth can-i list deployments --as system:serviceaccount:$NAMESPACE:$SERVI
 # The if statement should compare the output of the kubectl auth can-i command to the string yes, not the exit status ($?). The exit status of kubectl auth can-i is always 0
 # unless there's an error in executing the command itself.
 
-# you can add remove objects to role via editing in command line, without any errors
+# you can add or remove permissions from a Role by editing it.
 
 k get clusterRole
 # get how many cluster roles exist in default namespace
 k get clusterRole --no-header | wc -l
 k get clusterRoleBinding --no-header | wc -l
 
-# you can see subject of this rolebinding is system:bootstrappers:kubeadm
+# you can see the subject of this RoleBinding is system:bootstrappers:kubeadm
 k describe rolebinding kube-proxy -n kube-system
 
 # You have been asked to create a new ClusterRole for a deployment "pipeline" and bind it to a specific ServiceAccount scoped to a specific namespace.
 # Create a new ClusterRole named "deployment-clusterrole", which only allows to create the following resource types: "Deployment, StatefulSet, DaemonSet"
-# Create a new ServiceAccount named "cicd-token" in the existing namespace "app-team1", Bind the new ClusterRole "deployment-clusterrole" to the new ServiceAccount "cicd-token", 
+# Create a new ServiceAccount named "cicd-token" in the existing namespace "app-team1". Bind the new ClusterRole "deployment-clusterrole" to the new ServiceAccount "cicd-token",
 # limited to the namespace "app-team1".
 k create clusterrole deployment-clusterrole --verb=create --resource=deployment,statefulset,daemonset
 k create serviceaccount cicd-token -n app-team1
-# we are binding namespace scoped serviceAccount to a clusterRole via clusterRoleBinding
-k create clusterrolebinding deployment-clusterrolebinding --clusterrole=deployment-clusterrole --serviceaccount=app-team1:cicd-token -n app-team1
+# bind the ClusterRole to the ServiceAccount only inside namespace app-team1.
+k create rolebinding deployment-clusterrolebinding -n app-team1 --clusterrole=deployment-clusterrole --serviceaccount=app-team1:cicd-token
 k auth can-i create deployment -n app-team1 --as=system:serviceaccount:app-team1:cicd-token # yes
 k auth can-i create secret -n app-team1 --as=system:serviceaccount:app-team1:cicd-token # no
 
-# create a new serviceAccount with name "pvviewer", grant this SA access to "list all PVs" in the cluster by creating correct ClusterRole called 
+# create a new serviceAccount with name "pvviewer", grant this SA access to "list all PVs" in the cluster by creating correct ClusterRole called
 # "pvviewer-role" and clusterRoleBinding called "pvviewer-role-binding"
 k create serviceaccount pvviewer
 k get sa
@@ -777,13 +794,14 @@ k create clusterrole pvviewer-role --verb=list --resource=persistentvolumes
 k create clusterrolebinding pvviewer-role-binding --clusterrole=pvviewer-role --serviceaccount=default:pvviewer
 k auth can-i list persistentvolumes --as=system:serviceaccount:default:pvviewer # yes
 
-# create a new serviceAccount "gitops" in namespace "project-1" create role and rolebinding both named "gitops-role" and "gitops-rolebinding". allows the SA 
+# create a new serviceAccount "gitops" in namespace "project-1". Create role and rolebinding both named "gitops-role" and "gitops-rolebinding". Allows the SA
 # to create secrets and configmaps in the namespace
 k create serviceaccount gitops -n project-1
 k create role gitops-role -n project-1 --verb=create --resources=secrets,configmaps
 k create rolebinding gitops-rolebinding -n project-1 --role=gitops-role --serviceaccount=project-1:gitops
 k auth can-i create secret -n project-1 --as system:serviceaccount:project-1:gitops
 
+#####################################################################################
 ##### Job ##########################################################################
 
 k get job
@@ -795,7 +813,7 @@ kubectl delete -f job-definition.yaml
 k apply -f job-definition.yaml
 
 # imperative way to create a job
-k create job throw-dice-twice --image=kodekloud/throw-dice --dry-run -o yaml > test-job.yaml
+k create job throw-dice-twice --image=kodekloud/throw-dice --dry-run=client -o yaml > test-job.yaml
 
 k create job whalesay --image=docker/whalesay --dry-run=client -o yaml > job.yaml
 k get job whalesay
@@ -824,17 +842,17 @@ k get statefulset
 k describe statefulset prometheus-oper-prometheus > prometheus-operator.yml
 cat prometheus-operator.yml
 
-# grafana is using clusterIP by default, we can use port forwarding to access it from outside the cluster
-k get pod  # find name of the pod where grafana is runnig on
+# grafana uses ClusterIP by default, so we can use port forwarding to access it from outside the cluster.
+k get pod  # find the name of the pod where grafana is running.
 # open the logs for grafana pod and check which port it is listening on
-k logs GRANFA_POD_NAME -c grafana
-# port forward so we can access it from outside cluster
-# user/pass for grafana login can be found on the helm charts github page
+k logs GRAFANA_POD_NAME -c grafana
+# port forward so we can access it from outside the cluster.
+# user/pass for grafana login can be found in the Helm chart documentation.
 k port-forward deploy prometheus-grafana 80:3000
 
 # If you're thinking of a way to quickly access a pod for testing or development purposes without setting up a service, you might be referring to using kubectl port-forward.
 # This command allows you to forward a port from your local machine to a port on a pod. Here's how you can do it:
-kubectl port-forward pod/<pod-name> <local-port>:<pod-port>
+kubectl port-forward pod/POD_NAME LOCAL_PORT:POD_PORT
 # Once the port forwarding is set up, you can access the application by navigating to http://localhost:<local-port> in your browser.
 # This method is particularly useful for development and debugging purposes, as it allows you to access a pod directly without modifying your cluster's network configuration.
 # However, it's not suitable for production use, as it only works while the kubectl port-forward command is running and is limited to your local machine.
@@ -851,7 +869,7 @@ k api-resources --namespaced=false
 k api-resources
 
 # *** login to Kubernetes Cluster via OIDC
-curl -s -L https://artifactory.XXXX.XXXXXX.net/artifactory/XXXXX/k8s-oidc-client/k8s-oidc-client-init.sh 
+curl -s -L https://artifactory.XXXX.XXXXXX.net/artifactory/XXXXX/k8s-oidc-client/k8s-oidc-client-init.sh
 
 # OpenID Connect (OIDC) is an identity layer built on top of the OAuth 2.0 framework
 k8s-oidc-client --dev
@@ -877,8 +895,8 @@ ps -aux | grep kube-api | grep "encryption-provider-config"
 # can see all assigned labels to this node
 k describe nodes node01
 
-# all user access (wether from kubectl or access to service) => goes through kube-apiserver
-# this is how outside user can access kubeapi via certificate
+# all user access, whether from kubectl or direct API access, goes through kube-apiserver.
+# this is how an outside user can access kube-apiserver via certificate.
 curl https://my-kube-playground:6443/api/v1/pods \
   --key admin.key
   --cert admin.crt
@@ -897,7 +915,7 @@ k config --kubeconfig=/root/my-kube-config current-context
 # check the authorization modes on the cluster
 k describe pod kube-api-server-controlplane -n kube-system | grep authorization-mode
 
-# Get the API groups and resource names from command
+# get the API groups and resource names from command
 k api-resources
 
 # view list of enabled admission controllers
@@ -908,10 +926,10 @@ cat /etc/kubernetes/manifests/kube-apiserver.yaml | grep enable-admission-plugin
 # if you are running kube-apiserver as a pod
 ps -ef | grep kube-apiserver | grep admission-plugins
 
-# returns the "preferred version" from the api
+# returns the preferred version from the API
 k explain deployment
 
-# shows which api group and version the resource "job" has
+# shows which API group and version the resource "job" has
 kubectl explain job
 
 # enable convert functionality on kubectl
@@ -919,28 +937,28 @@ curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stabl
 sudo install -o root -g root -m 0755 kubectl-convert /usr/local/bin/kubectl-convert
 k convert --help
 
-# convert the yaml file for a deployment from version apps/v1beta to apps/v1
+# convert the YAML file for a Deployment from an older apps API version to apps/v1
 k convert -f nginx.yaml --output-version apps/v1
 
 k convert -f ingress-old.yaml --output-version networking.k8s.io/v1 > ingress.yaml
 k apply -f ingress.yaml
 
 # What is the preferred version for authorization.k8s.io api group?
-kubectl proxy 8001&  # & runs the command in the background and kubectl proxy command starts the proxy to the kubernetes API server.
+kubectl proxy --port=8001 &  # & runs the command in the background and kubectl proxy starts the proxy to the Kubernetes API server.
 curl localhost:8001/apis/authorization.k8s.io
 
 # Enable the v1alpha1 version for rbac.authorization.k8s.io API group on the controlplane node.
 cd /etc/kubernetes/manifests
 vi kube-apiserver.yaml
 # add
---runtime-config=rbac.authorization.k8s.io/v1alpha1
+# --runtime-config=rbac.authorization.k8s.io/v1alpha1
 
 # get info about specific section of a yaml object
 kubectl explain cronjob.spec.jobTemplate --recursive
 
 ##########################################################################
 
-# i have script A inside a pod in namespace 1 and want to execute it from another pod in namesapce B, what is the correct command for this?
+# I have script A inside a pod in namespace 1 and want to execute it from another pod in namespace B. What is the correct command for this?
 kubectl exec -n namespace-1 pod-name -- /path/to/script.sh
 
 
@@ -950,6 +968,7 @@ kubectl exec -n namespace-1 pod-name -- /path/to/script.sh
 # Create a PersistentVolumeClaim: This is a request for storage by a pod. Both the deployment and the job will use the same PVC to access the shared storage.
 # Mount the PVC in both the Deployment and the Job: This allows both to read from and write to the same storage.
 
+#####################################################################################
 ##### HELM ##########################################################################
 
 # shows name of operating system
@@ -976,7 +995,7 @@ helm search repo wordpress
 helm repo list
 
 # install a helm chart
-helm install <local-name> <repo>/<chart-name>
+helm install LOCAL_NAME REPO/CHART_NAME
 
 # each chart can be installed with different names several times
 helm install release-1 bitnami/wordpress
@@ -999,18 +1018,18 @@ helm list
 # find pending helm charts in all environments
 helm list --pending -A
 
-# delete a installed chart
-helm uninstall <chart-local-name>
+# delete an installed chart
+helm uninstall CHART_LOCAL_NAME
 helm uninstall release-1
 helm uninstall bravo
 
-# replace the existing values.yaml file inside the installed chart with this
-helm install --values=my-values.yaml release-1
+# upgrade an existing release with values from a custom values file.
+helm upgrade release-1 REPO/CHART_NAME --values=my-values.yaml
 
 # install chart with custom values "myvalues.yaml" with local name "myredis", the chart files are downloaded at location "./redis"
 helm install -f myvalues.yaml myredis ./redis
 
-# install a chart by default values, but change a specific one 
+# install a chart with default values, but change a specific one
 # "version" is a variable at values.yaml file
 helm install my-chart ./chart --set version=2.0.0
 
@@ -1024,29 +1043,29 @@ helm show values bitnami/node
 helm show values bitnami/node | grep -i replica # replicaCount: 1
 helm install mynode bitnami/node --set replicaCount=5
 
-# how to update helm charts
-helm upgrade release-1
+# how to update a Helm release
+helm upgrade release-1 REPO/CHART_NAME
 
-# apply changes after updating values.yml file
-helm upgrade monitoring prom-repo/kub-promethues-stack -- values=values.yaml
+# apply changes after updating values.yaml file
+helm upgrade monitoring prom-repo/kube-prometheus-stack --values=values.yaml
 
-# create a Chart from local provided file
+# create a Chart from local provided files
 helm create myChart
 
 # this will inject the values into the chart to make sure that it works correctly
 helm template -f values/test-values.yml myChart
 
-# checks the yaml file's syntax for both values file and helm template files
+# checks the YAML file syntax for both values files and Helm template files
 helm lint -f values/test-values.yml myChart
 
-# install our helm template:
-helm install -f values/alpha.yml chart_name given_name
+# install our Helm chart:
+helm install given_name chart_name -f values/alpha.yml
 
 # install the chart into the cluster, this should be done for each chart that wants to be added into the cluster based on the chart
 helm install -f values/test-values.yml release-chart myChart
 
-# same as above, but this one injects values to kubernetes cluster temporarily to make sure it works fine
-helm install --dry-run -f values/test-values.yml myChart
+# same as above, but this renders the release without installing it to make sure it works.
+helm install release-chart myChart -f values/test-values.yml --dry-run
 
 helm upgrade -f myvalues.yaml -f override.yaml redis ./redis
 
@@ -1061,13 +1080,13 @@ helmfile sync
 # shows all the applied charts
 helmfile list
 
-# delete all the service
+# delete all releases managed by the helmfile
 helmfile destroy
 
 
 
 # change the pod to run as ROOT user and add SYS_TIME capability
-#kubectl get pod a[[-sec-kff345 -o yaml > app-sec.yaml
-#vi app-sec.yaml
+# kubectl get pod app-sec-kff345 -o yaml > app-sec.yaml
+# vi app-sec.yaml
 # do the editing
 # k replace -f app-sec.yaml

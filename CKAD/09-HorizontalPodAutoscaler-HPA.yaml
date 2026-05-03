@@ -1,16 +1,23 @@
----
-# if you apply this file via "kubectl apply -f" command, it will create autoscaling hpa on the desired deployment
+# HPA resource metrics require the target Deployment containers to define CPU or memory requests
 
+---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: api-gateway
+  labels:
+    app: api-gateway
 spec:
-  # max number of pods allowed for deployment
-  maxReplicas: 4
+  # which deployments this will be applied to:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-gateway
   # min number of pods per deployment
   minReplicas: 1
-  # target cpu level at 45% on each pod, if the cpu utilization goes higher, increase the number of pods
+  # max number of pods allowed per deployment
+  maxReplicas: 4
+  # Scale out when average Pod CPU usage is above/below 45% of requested CPU
   metrics:
     - type: Resource
       resource:
@@ -18,26 +25,47 @@ spec:
         target:
           type: Utilization
           averageUtilization: 45
-  # which deployments this will be applied to
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: api-gateway
+  # controls how the HPA scales, rather than just when. Lets you fine-tune the aggressiveness and speed of scaling in each direction
+  behavior:
+    # Rules that apply when the HPA decides it needs more pods
+    scaleUp:
+      # No cooldown before acting on a scale-up decision. The moment the HPA sees high load, it scales up immediately without waiting to confirm the trend. (Default is also 0, so this is explicit but not changing behavior.)
+      stabilizationWindowSeconds: 0
+      # A list of constraints on how fast scaling can happen
+      policies:
+        # The policy is expressed as a percentage of current pods rather than a fixed count
+        - type: Percent
+          # At most 100% (all) of current pods number can be added per period
+          value: 100
+          # That window is 60 seconds. So the HPA can add at most 100% of pods (4 here) per minute, even if the load spike demands 20 more immediately
+          periodSeconds: 60
+    # Rules that apply when the HPA decides it needs fewer pods
+    scaleDown:
+      # Before removing any pods, the HPA looks back over the last 5 minutes of metric history and uses the highest replica count seen in that window. This prevents flapping — if load briefly dips and then spikes again, pods won't be killed prematurely.
+      stabilizationWindowSeconds: 300
+      policies:
+        # The policy is expressed as an absolute number of pods (as opposed to a percentage)
+        - type: Percent
+          # At most 50% of current pods can be removed per period
+          value: 50
+          # That window is 60 seconds. So if you have 20 pods, at most 10 can be removed per minute
+          periodSeconds: 60
 
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: php-apache
+  labels:
+    app: php-apache
 spec:
-  # which deployments this will be applied to
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: php-apache
   minReplicas: 1
   maxReplicas: 10
-  # target cpu level at 50% on each pod, if the cpu utilization goes higher, increase the number of pods
+  # Scale out when average Pod CPU usage is above 50% of requested CPU (average on all pods)
   metrics:
     - type: Resource
       resource:
@@ -45,13 +73,29 @@ spec:
         target:
           type: Utilization
           averageUtilization: 50
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Pods
+          value: 4
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
 
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: eclipse # the HPA usaually have same name as the deployment its affecting
+  # the HPA usaually have same name as the deployment its affecting
+  name: eclipse
   namespace: xx1
+  labels:
+    app: eclipse
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -59,6 +103,7 @@ spec:
     name: eclipse
   minReplicas: 2
   maxReplicas: 4
+  # Scale out when average Pod CPU usage is above 65% of requested CPU
   metrics:
     - type: Resource
       resource:
@@ -66,3 +111,16 @@ spec:
         target:
           type: Utilization
           averageUtilization: 65
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60

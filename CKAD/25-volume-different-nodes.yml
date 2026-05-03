@@ -1,0 +1,111 @@
+# If a file written by one Pod does not show up in the second Pod, the Pods were probably scheduled on different nodes
+# Check which nodes the Pods are on:
+# kubectl get pod busybox1 -o wide
+# kubectl get pod busybox2 -o wide
+#
+# This example uses a hostPath-backed PV, so the data is tied to one node's filesystem
+# For shared files across multiple nodes, use node-independent storage such as NFS or a CSI-backed storage class that supports ReadWriteMany
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: myvolume
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: normal
+  persistentVolumeReclaimPolicy: Retain
+  # hostPath uses a path on the node where the Pod runs. It is for single-node/testing examples, not portable multi-node storage
+  hostPath:
+    path: /etc/foo
+    type: DirectoryOrCreate
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mypvc
+spec:
+  storageClassName: normal
+  resources:
+    requests:
+      storage: 4Gi
+  accessModes:
+    - ReadWriteOnce
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox1
+spec:
+  securityContext:
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  volumes:
+    - name: my-vol
+      persistentVolumeClaim:
+        claimName: mypvc
+  containers:
+    - name: busybox
+      image: busybox:1.36.1
+      command: ["/bin/sh", "-c", "sleep 3600"]
+      volumeMounts:
+        - name: my-vol
+          mountPath: /etc/foo
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 25m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox2
+spec:
+  securityContext:
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  volumes:
+    - name: my-vol
+      persistentVolumeClaim:
+        claimName: mypvc
+  containers:
+    - name: busybox
+      image: busybox:1.36.1
+      command: ["/bin/sh", "-c", "sleep 3600"]
+      volumeMounts:
+        - name: my-vol
+          mountPath: /etc/foo
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 25m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
+
+
+# If busybox1 and busybox2 run on the same node, they can both access the same hostPath directory through the same PVC
+# If Kubernetes schedules them on different nodes, busybox2 may fail to mount the volume, or it may not see the same underlying files, because hostPath is tied to one node’s filesystem

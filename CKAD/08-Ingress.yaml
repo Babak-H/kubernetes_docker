@@ -1,31 +1,31 @@
+# Ingress resources route external HTTP/HTTPS traffic to Services
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: ingress-service
   annotations:
-    # you want to rewrite the URL target in places. (used for redirection to prevent 404 errors)
+    # Enable regex paths for ingress-nginx and rewrite captured paths
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # you want to rewrite the URL target in place. (used for redirection to prevent 404 errors)
     nginx.ingress.kubernetes.io/rewrite-target: /$1
 spec:
-  # ingressClassName tells Kubernetes which Ingress controller should process this resource.
-  # If you have multiple controllers (e.g. NGINX, Traefik, AWS ALB), this ensures the right one picks it up
   ingressClassName: nginx
   rules:
     - http:
         # configuration regarding the individual path routing
         paths:
-          # this is for frontend application's service, with path like "/", "/test1",...
-          - pathType: Prefix
-            path: "?(.*)"
+          # Frontend service: /, /test1, and other non-api paths
+          - path: /(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: client-clusterip-service
-                # target port inside the service
                 port:
                   number: 8080
-          # this is for backend service, with path like "/api/", "/api/test1",...
-          - pathType: Prefix
-            path: "/api/?(.*)"
+          # Backend service: /api and /api/*
+          - path: /api/?(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: api-clusterip-service
@@ -33,20 +33,20 @@ spec:
                   number: 3000
 
 ---
-# Ingress Controller with Authentication
+# Ingress with basic authentication
 
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: secure-routing
   annotations:
-    # type of authentication => https://kubernetes.github.io/ingress-nginx/examples/auth/basic/
     nginx.ingress.kubernetes.io/auth-type: basic
     # name of the secret that contains the user/password definitions
     nginx.ingress.kubernetes.io/auth-secret: basic-auth
     # message to display with an appropriate context why the authentication is required
-    nginx.ingress.kubernetes.io/auth-realm: "Authentication Required, please login"
+    nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"
 spec:
+  ingressClassName: nginx
   rules:
     - host: queue.fleetman.com
       http:
@@ -60,16 +60,13 @@ spec:
                   number: 8161
 
 ---
-# Ingress Controller with Multiple Prefixes
-# here both services are under one host address
+# Ingress with multiple path prefixes under one host
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: dashboard-ingress
-  # namespace for ingress => same as service and pod
   namespace: kubernetes-dashboard
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /$1
 spec:
   ingressClassName: nginx
   rules:
@@ -92,35 +89,33 @@ spec:
                   number: 8080
 
 ---
-# here we ingress to two different hosts
+# Ingress routing two hosts to two different Services
 
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: ingress-wear-watch
   annotations:
-    # value in rewrite-target. This works just like a search and replace function.
-    # replace("/path","/")
-    nginx.ingress.kubernetes.io/rewrite-target: / # anything else goes to main page "/"
+    # replaces all the non-mentioned addresses after /? to /
+    nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
 spec:
+  ingressClassName: nginx
   rules:
-    # http://wear.my-online-store.com/
     - host: wear.my-online-store.com
       http:
         paths:
-          - path: "/"
+          - path: /
             pathType: Prefix
             backend:
               service:
                 name: wear-service
                 port:
                   number: 80
-    # http://watch.my-online-store.com/
     - host: watch.my-online-store.com
       http:
         paths:
-          - path: "/"
+          - path: /
             pathType: Prefix
             backend:
               service:
@@ -135,6 +130,9 @@ spec:
 # if we run "k get svc" we can see that both services are running on port 8080, traffic comes to port
 # 30093 on ingress, then we redirect it to port 8080 on services
 
+# Virtual-host routing example
+# External traffic reaches the Ingress controller node port, then routes to Services on port 8080
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -142,22 +140,22 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
+  ingressClassName: nginx
   rules:
-    - host: watch.ecom-store.com # http://watch.ecom-store.com:30093/video
+    - host: watch.ecom-store.com
       http:
         paths:
-          - path: "/video"
+          - path: /video
             pathType: Prefix
             backend:
               service:
                 name: video-service
                 port:
-                  # this is the port on video-service SVC
                   number: 8080
-    - host: apparels.ecom-store.com # http://apparels.ecom-store.com:30093/wear
+    - host: apparels.ecom-store.com
       http:
         paths:
-          - path: "/wear"
+          - path: /wear
             pathType: Prefix
             backend:
               service:
@@ -165,7 +163,7 @@ spec:
                 port:
                   number: 8080
 
-                  
+
 # create ingress for service "my-video-service" to be available from "http://ckad-mock-exam-solution.com:30093/video"
 # 30093 is port on Ingress NOT on service
 # k get svc => get port on the service

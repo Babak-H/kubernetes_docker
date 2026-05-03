@@ -1,69 +1,135 @@
-# in Blue-Green Deployment, we create both environments, then switch from Blue to Green (suddenly)
-# each deployment has it's own service (2 deployments, 2 services, the service chooses the pod based on version)
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: my-service
-spec:
-  selector:
-    app: v1 ####
-  type: ClusterIP
-  ports:
-    - port: 80
-
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: myapp-blue ####
-  labels:
-    app: myapp
-spec:
-  selector:
-    matchLabels:
-      type: front-end
-  replicas: 5
-  template:
-    metadata:
-      labels:
-        app: v1 ####
-        type: front-end
-    spec:
-      containers:
-        - name: app-container
-          image: my-app-image:1.0 ####
+# Blue/green deployment keeps two versions running, then switches traffic by changing the Service selector
+# The active Service selector points to either version: blue or version: green
 
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: my-service
+  labels:
+    app: myapp
 spec:
-  selector:
-    app: v2 ####
   type: ClusterIP
+  selector:
+    app: myapp
+    version: blue  ########
   ports:
-    - port: 80
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
 
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: myapp-green ####
+  name: myapp-blue
   labels:
     app: myapp
+    version: blue
 spec:
+  replicas: 5
   selector:
     matchLabels:
-      type: front-end
-  replicas: 5
+      app: myapp
+      version: blue  ########
   template:
     metadata:
       labels:
-        type: front-end
-        app: v2 ####
+        app: myapp
+        version: blue  ########
     spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: app-container
-          image: my-app-image:2.0 ####
+          image: my-app-image:1.0  ########
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            runAsUser: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-green
+  labels:
+    app: myapp
+    version: green
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: myapp
+      version: green  ########
+  template:
+    metadata:
+      labels:
+        app: myapp
+        version: green  ########
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app-container
+          image: my-app-image:2.0  ########
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            runAsUser: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+# Switch traffic to green by changing the Service selector:
+# k patch service my-service -p '{"spec":{"selector":{"app":"myapp","version":"green"}}}'v

@@ -1,19 +1,22 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: hello-dep
+  labels:
+    app: hello-dep
 spec:
   replicas: 3
-  # number of previous iterations to keep
+  # number of previous iterations to keep for rollbacks
   revisionHistoryLimit: 3
   # this section is for how updating the pods should happen
   strategy:
-    # rolling updates or recreate
+    # rolling update or recreate (all at once)
     type: RollingUpdate
-    rollingUpdate: # update step-by-step
-      # how many new pods to create when updating
+    rollingUpdate:
+      # Number of extra Pods allowed above the desired replica count during an update
       maxSurge: 1
-      # how many of the old pods are allowed to be unavailable at once when updating
+      # Number of old Pods allowed to be unavailable during an update
       maxUnavailable: 1
   selector:
     matchLabels:
@@ -23,37 +26,68 @@ spec:
       labels:
         app: hello-dep
     spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: hello-dep
           image: k8sacademy/hello-app:1.0
-          resources:
-            limits:
-              memory: 128Mi
-              cpu: 200m
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
 
 ---
-# instead of number, we define the surge level via percentage
+# RollingUpdate using percentages instead of absolute Pod counts
 spec:
   replicas: 4
+  revisionHistoryLimit: 3
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 25% # if we have 4 pod replicas, then we can have one new pod (0.25) created at a time
+      # With 4 replicas, 25% allows 1 extra new Pod during the update
+      maxSurge: 25% 
+      # With 4 replicas, 25% allows 1 old Pod to be unavailable during the update
       maxUnavailable: 25% # if we have 4 pod replicas, then we can have one old pod (0.25) unavailable at a time
 
+
 ---
-# this will recreate everything (delete all pods at once and recreate all at once), NOT GOOD FOR PRODUCTION
+# Recreate deletes old Pods before creating replacement Pods.
 spec:
   replicas: 6
+  revisionHistoryLimit: 3
   strategy:
-    type: recreate
+    type: Recreate
+  selector:
+    matchLabels:
+      app: hello-dep-recreate
 
----
-# upgrade the image version to 1.17
-# k set image deploy nginx-deploy nginx=nginx:1.17
 
-# undo the update and go back to previous version:
-# k rollout undo deploy nginx-deploy
+# Upgrade the nginx container image version to 1.17:
+# k set image deployment/nginx-deploy nginx=ngnix:1.17
+
+# Roll back to the previous revision (undo the update)
+# k rollout undo deployment/nginx-deploy

@@ -3,36 +3,75 @@
 # configure multiple such initContainers as well, In that case each init container is run one at a time in Sequential order. If any of the initContainers fail to complete, Kubernetes restarts 
 # the Pod repeatedly until the Init Container succeeds.
 
+---
 apiVersion: v1
 kind: Pod
 metadata:
   name: myapp-with-init
   labels:
-    name: my-app-with-init
+    app: myapp-with-init
 spec:
-# First we run the init container 1, then init container2, and at last the main app container. This is very useful for cases when you have to wait for another server to come up before  
-# running your app.
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  # First init-myservice runs, then init-db runs, then the main app container starts
+  # This is very useful for cases when you have to wait for another server to come up before running your main app
   initContainers:
     - name: init-myservice
-      image: busybox:1.28
-      # check every 2 seconds for the server to be running
+      image: busybox:1.36.1
+      # check every 2 seconds for the server to see if it is running
       command: ["sh", "-c", "until nslookup mysvc.namespace.svc.cluster.local; do echo waiting for myservice; sleep 2; done"]
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 25m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
     - name: init-db
-      image: busybox:1.28
-      # check every 2 seconds, for db to be running
+      image: busybox:1.36.1
+      # check every 2 seconds for the DB to see if it is running
       command: ["sh", "-c", "until nslookup mydb.namespace.svc.cluster.local; do echo waiting for mydb; sleep 2; done"]
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 25m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
   containers:
     - name: my-app-with-init
-      image: busybox
+      image: busybox:1.36.1
       ports:
-        - containerPort: 80
+        - containerPort: 8080
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
       resources:
+        requests:
+          cpu: 25m
+          memory: 32Mi
         limits:
+          cpu: 100m
           memory: 64Mi
-          cpu: 50m
 
 ---
-# init-container for a pod that downloads something and puts it inside the volume that main container uses
+# init-container for a pod that downloads something and puts it inside the shared volume that main container uses
 # init containers get "terminated" aftern they are finished running
 
 apiVersion: v1
@@ -40,37 +79,59 @@ kind: Pod
 metadata:
   name: init-demo
 spec:
-  # here we have initial containers that run BEFORE the main app starts
+  securityContext:
+    fsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+  # init contain downloads the html file and puts it inside the shared volume
   initContainers:
     - name: install
-      image: busybox
-      command: ["wget", "-o", "/work-dir/index.html", "http://info.cern.ch"]
+      image: busybox:1.36.1
+      command: ["wget", "-O", "/work-dir/index.html", "http://info.cern.ch"]
       volumeMounts:
         - name: workdir
-          mountPath: "/work-dir"
-  containers:
-    # the main container of the app
-    - name: nginx
-      image: nginx
+          mountPath: /work-dir
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
       resources:
         requests:
-          cpu: 100m
-          memory: 128Mi
+          cpu: 25m
+          memory: 32Mi
         limits:
-          cpu: 250m
-          memory: 256Mi
+          cpu: 100m
+          memory: 64Mi
+  containers:
+    # main nginx container takes that file from shared volume and serves it to web traffic
+    - name: nginx
+      image: nginxinc/nginx-unprivileged:1.25-alpine
       ports:
-        - containerPort: 80
-      # mount the downloaded html page in the nginx folder to be visible as web page
+        - containerPort: 8080
       volumeMounts:
         - name: workdir
           mountPath: /usr/share/nginx/html
-  # init-container adds data to this volume and later, main container uses it
+      securityContext:
+        runAsUser: 101
+        runAsGroup: 101
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi
   volumes:
     - name: workdir
       emptyDir: {}
 
-
+---
 # In a multi-container pod, each container is expected to run a process that stays alive as long as the POD's lifecycle. For example in the multi-container
 # pod that we talked about earlier that has a web application and logging agent, both the containers are expected to stay alive at all times. The process running
 # in the log agent container is expected to stay alive as long as the web application is running. If any of them fails, the POD restarts.
@@ -78,7 +139,7 @@ spec:
 # the main web application. That is a task that will be run only one time when the pod is first created. Or a process that waits for an external service or
 # database to be up before the actual application starts. That's where initContainers comes in.
 # An initContainer is configured in a pod like all other containers, except that it is specified inside a initContainers section, like this:
----
+
 apiVersion: v1
 kind: Pod
 metadata:
@@ -86,116 +147,248 @@ metadata:
   labels:
     app: myapp
 spec:
+  securityContext:
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  volumes:
+    - name: app-code
+      emptyDir: {}
   initContainers:
-    # the init container will download this repo and then stop
     - name: init-myservice
-      image: busybox
-      command: ["sh", "-c", "git clone <some-repository-that-will-be-used-by-application>"]
+      image: alpine/git:2.45.2
+      command: ["sh", "-c", "git clone <some-repository-that-will-be-used-by-application> /app-code"]
+      volumeMounts:
+        - name: app-code
+          mountPath: /app-code
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi
   containers:
     - name: myapp-container
-      image: busybox:1.28
-      command: ["sh", "-c", "echo the app is running! && sleep 3600"]
+      image: busybox:1.36.1
+      command: ["sh", "-c", "cat /app-code && sleep 3600"]
+      volumeMounts:
+        - name: app-code
+          mountPath: /app-code
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 25m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
 
-
-# multi-container pod with SideCar
 ---
+# Multi-container Pod with a sidecar (sidecar runs all the time, besides the main container)
+
 apiVersion: v1
 kind: Pod
 metadata:
   name: multi-pod
 spec:
-  # general SecurityContext that applies to all containers by default
   securityContext:
     runAsUser: 1001
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
   containers:
-    - image: ubuntu
-      name: web
+    # main web server container
+    - name: web
+      image: ubuntu:24.04
       command: ["sleep", "5000"]
-      # this overrides the general SecurityContext for this specific container
+      # Container-level securityContext overrides the Pod-level runAsUser.
       securityContext:
         runAsUser: 1002
-    - image: ubuntu
-      name: sidecar
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 25m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+    # sidecar container
+    - name: sidecar
+      image: ubuntu:24.04
       command: ["sleep", "5000"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 25m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
 
-
-# multi-container pod with FileBeat sidecar
 ---
+# Multi-container Pod with a Filebeat sidecar.
+
 apiVersion: v1
 kind: Pod
 metadata:
   name: app
   namespace: elastic-stack
   labels:
-    name: app
+    app: event-simulator
 spec:
+  securityContext:
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
   volumes:
     - name: log-volume
       hostPath:
         path: /var/log/webapp
         type: DirectoryOrCreate
   containers:
-    # main container generates logs and saves them at /log on volume
+    # Main container generates logs and writes them to the shared volume.
     - name: app
-      image: event-simulator
+      image: event-simulator:1.0.0
       volumeMounts:
-        - mountPath: /log
-          name: log-volume
-    # sidecar access the logs from volumes, formats them and then exports them
+        - name: log-volume
+          mountPath: /log
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+    # Sidecar reads logs from the shared volume and exports them.
     - name: sidecar
-      image: filebeat-configured
+      image: filebeat-configured:1.0.0
       volumeMounts:
-        - mountPath: /var/log/event-simulator
-          name: log-volume
-
-
-# a container within the pod named 'poller' is hard-coded to connect to 'nginxsvc' service on port 90, as this port changes to 5050,
-# an additional container needs to be added to the poller pod which adapts the container to connect to this new port, via 'ambassador container' design
-# add an 'HAproxy container' named haproxy bound to port 90 to the poller pod and deploy the enhanced pod.
-# use the image haproxy and inject the configuration located at /opt/KDMC3323423/haproxy.cfg via a configmap named haproxy-config monuted to the container at /usr/local/etc/haproxy/haproxy.cfg
-
-# cat /opt/KDMC3323423/haproxy.cfg
-# k create cm haproxy-config --from-file=/opt/KDMC3323423/haproxy.cfg
-# k get cm haproxy-config
+        - name: log-volume
+          mountPath: /var/log/event-simulator
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
 
 ---
+# Ambassador sidecar example.
+
+# The "poller-container" container connects to localhost:90 (as mentioned in the ENVs), It represents an app that is hardcoded/configured to connect to localhost:90 But the real service, nginxsvc, now listens on port 5050
+# HAProxy listens on port 90 and forwards traffic to nginxsvc on port 5050
+# Because containers in the same Pod share the same network namespace, poller-container can connect to localhost:90, and HAProxy can receive that traffic and forward it to nginxsvc:5050
+
+# poller-container -> localhost:90 -> haproxy sidecar -> nginxsvc:5050
+
+# use the image haproxy and inject the configuration located at /opt/KDMC3323423/haproxy.cfg via a configmap named haproxy-config monuted to the container at /usr/local/etc/haproxy/haproxy.cfg
+# Create the ConfigMap from the referenced file:
+# kubectl create configmap haproxy-config --from-file=/opt/KDMC3323423/haproxy.cfg
+
 apiVersion: v1
 kind: Pod
 metadata:
-  label: pod1
-name: poller
+  name: poller
+  labels:
+    app: poller
 spec:
+  securityContext:
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
   volumes:
     - name: haproxy-config
       configMap:
         name: haproxy-config
+
   containers:
-    # main container (connects to port 90)
     - name: poller-container
       image: poller:stable
       env:
         - name: NGINX_HOST
-          value: "localhost"
+          value: localhost
         - name: NGINX_PORT
           value: "90"
-    # ambassador container, redirects the main container to use port 5050 instead
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi
+
     - name: haproxy
-      image: haproxy
+      image: haproxy:2.9-alpine
+      ports:
+        - containerPort: 90
       volumeMounts:
         - name: haproxy-config
           mountPath: /usr/local/etc/haproxy/haproxy.cfg
           subPath: haproxy.cfg
+          readOnly: true
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi
 
 ---
-# update the nginxsvc service to serve on port 5050, update the original pod to connect to localhost instead of nginxsvc
+# Service updated to expose nginxsvc on port 5050
 apiVersion: v1
 kind: Service
 metadata:
   name: nginxsvc
-spec: 
+  labels:
+    app: nginx
+spec:
   selector:
     app: nginx
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 5050
       targetPort: 5050

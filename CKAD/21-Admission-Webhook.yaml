@@ -1,35 +1,42 @@
 # validating webhook => A Kubernetes admission controller that checks incoming API requests without modifying them and rejects them if they violate custom validation rules.
 # mutating webhook => A Kubernetes admission controller that modifies or adds fields to incoming API requests before they are stored.
 # validating admission policy => A built-in Kubernetes feature that uses CEL expressions to enforce validation rules without needing a webhook server.
-#
-# admission webhooks are extra level of control over resource creation. we can add extra features to ensure k8s developers use correct configuration when apply resource creation/change
-# configure the already created admission webhook, Validating Webhook
 
+# admission webhooks are extra level of control over resource creation. we can add extra features to ensure k8s developers use correct configuration when apply resource creation/change to configure the already created admission webhook, Validating Webhook.
+
+
+---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration # or MutatingWebhookConfiguration
 metadata:
-  # name of the webhook
-  name: "pod-policy.example.com"
+  name: pod-policy.example.com 
 webhooks:
-  # name of the webhook
-  - name: "pod-policy.example.com"
+  - name: pod-policy.example.com # name of the webhook
     clientConfig:
       # in case the webhook is deployed inside the cluster, in which namespace? via which service?
       service:
-        namespace: "webhook-namespace"
-        name: "webhook-service"
-      # CA bundle is needed to have TLS connection with the webhook from kubernetes
+        namespace: webhook-namespace
+        name: webhook-service
+        path: /validate
+        port: 443
+      # Base64-encoded CA bundle used by the API server to verify the webhook server certificate
+      # CA bundle is needed, to have TLS connection with the webhook from kubernetes
       caBundle: "Ce56tdfg..546fgfK"
+    # rules define in which situations we want to send api calls to this webhook for admission
     rules:
-      # rules define in which situations we want to send api calls to this webhook for admission
       - apiGroups: [""]
         apiVersions: ["v1"]
         operations: ["CREATE"]
         resources: ["pods"]
-        scope: "Namespaced"
+        scope: Namespaced
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 5
+    failurePolicy: Fail
+
 
 ---
-# webhook configuration, Mutating Webhook, related to deployment and service below
+# MutatingWebhookConfiguration related to the Deployment and Service below
 
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
@@ -41,28 +48,34 @@ webhooks:
       service:
         name: webhook-server
         namespace: webhook-demo
-        path: "/mutate"
+        path: /mutate
+        port: 443
       caBundle: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1J..."
     rules:
-      - apiVersions: ["v1"]
+      - apiGroups: [""]
+        apiVersions: ["v1"]
         resources: ["pods"]
-        scope: "Namespaced"
+        scope: Namespaced
         operations: ["CREATE"]
-    admissionReviewVersions: ["v1beta1"]
+    admissionReviewVersions: ["v1"]
     sideEffects: None
     timeoutSeconds: 5
+    failurePolicy: Fail
 
 # kubectl apply -f pod-with-conflict.yaml
 # Error from server: error when creating "pod-with-conflict.yaml": admission webhook "webhook-server webhook-demo.svc" denied the request:
 # runAsNonRoot specified, but runAsUser set to 0 (the root user)
 
-# webhook deployment example
 ---
+# Webhook server Deployment
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: webhook-server
   namespace: webhook-demo
+  labels:
+    app: webhook-server
 spec:
   replicas: 1
   selector:
@@ -76,32 +89,65 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1234
+        fsGroup: 1234
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: server
-          image: stackrox/admission-controller-webhook-demo:latest
-          imagePullPolicy: Always
+          image: stackrox/admission-controller-webhook-demo:v0.1
+          imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8443
-              name: webhook-api
+            - name: webhook-api
+              containerPort: 8443
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: webhook-api
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: webhook-api
+            initialDelaySeconds: 15
+            periodSeconds: 20
           volumeMounts:
             - name: webhook-tls-certs
               mountPath: /run/secrets/tls
               readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
       volumes:
         - name: webhook-tls-certs
           secret:
             secretName: webhook-server-tls
 
-# webhook service for the webhook deployment
 ---
+# Service used by the API server to reach the webhook server over TLS
+
 apiVersion: v1
 kind: Service
 metadata:
   name: webhook-server
   namespace: webhook-demo
+  labels:
+    app: webhook-server
 spec:
   selector:
     app: webhook-server
   ports:
-    - port: 443 # TLS
-      targetPort: webhook-api # 8443
+    - name: https
+      port: 443
+      targetPort: webhook-api
+      protocol: TCP
+
+
+

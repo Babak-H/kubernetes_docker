@@ -1,0 +1,238 @@
+# DaemonSet
+# Use a DaemonSet when you want one Pod on each matching node, such as log collectors like Fluentd, node agents, network plugins, or exporters
+# A DaemonSet creates as many Pods as needed for the matching nodes in the cluster
+# We do not set replicas on a DaemonSet because the controller schedules Pods per node
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluentd
+  labels:
+    name: fluentd
+spec:
+  selector:
+    matchLabels:
+      name: fluentd
+  template:
+    metadata:
+      labels:
+        name: fluentd
+    spec:
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: fluentd
+          image: fluentd:v2.5.2
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+            limits:
+              memory: 256Mi
+              cpu: 250m
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+      volumes:
+        - name: varlog
+          # daemoonset volumes use hostPath since the always run on specific node
+          # hostPath mounts the node's /var/log directory so the log collector can read node logs
+          hostPath:
+            path: /var/log
+            type: Directory
+
+
+# Create a DaemonSet named configurator in namespace configurator. It uses image bash,
+# mounts /configurator as a hostPath volume on each node, writes "aba997ac-1c89-4d64"
+# into /configurator/config on that node, and stays running with sleep.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: configurator
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: configurator
+  namespace: configurator
+  labels:
+    k8s-app: conf
+spec:
+  selector:
+    matchLabels:
+      k8s-app: conf
+  template:
+    metadata:
+      labels:
+        k8s-app: conf
+    spec:
+      securityContext:
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: my-vol
+          hostPath:
+            path: /configurator
+            type: DirectoryOrCreate
+      containers:
+        - name: configurator
+          image: bash:5.2
+          command: ["/bin/sh", "-c", "echo 'aba997ac-1c89-4d64' > /configurator/config; sleep 1d"]
+          volumeMounts:
+            - name: my-vol
+              mountPath: /configurator
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              memory: 32Mi
+              cpu: 25m
+            limits:
+              memory: 64Mi
+              cpu: 100m
+
+
+# Ensure a single instance of the nginx Pod runs on each node of the Kubernetes cluster
+# Do not edit node taints. Add tolerations if the DaemonSet must also run on control-plane nodes
+# Use ds-kusc00201 as the DaemonSet name
+# kubectl get nodes --show-labels
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ds-kusc00201
+  labels:
+    app: nginx
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      # These tolerations allow the Pod to run on control-plane nodes.
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged:1.25-alpine
+          ports:
+            - containerPort: 8080
+          securityContext:
+            runAsUser: 101
+            runAsGroup: 101
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 50m
+            limits:
+              memory: 128Mi
+              cpu: 200m
+
+
+# Use namespace project-1 for the following task. Create a DaemonSet named daemon-imp with image "httpd:2.4-alpine" and labels "id=daemon-imp" and "uuid=18426a0b-5f59-4e10-923f-c0e078e82462"
+# Its Pods should request 20 millicores of CPU and 20Mi of memory, The Pods should run on all nodes, including control-plane nodes
+
+# kubectl get nodes --show-labels
+# kubectl get ns
+# kubectl create ns project-1
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: project-1
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: daemon-imp
+  namespace: project-1
+  labels:
+    id: daemon-imp
+    uuid: 18426a0b-5f59-4e10-923f-c0e078e82462
+spec:
+  selector:
+    matchLabels:
+      id: daemon-imp
+      uuid: 18426a0b-5f59-4e10-923f-c0e078e82462
+  template:
+    metadata:
+      labels:
+        id: daemon-imp
+        uuid: 18426a0b-5f59-4e10-923f-c0e078e82462
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      tolerations:
+        # It was requested that the DaemonSet runs on all nodes, so we need these tolerations
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - image: httpd:2.4-alpine
+          name: daemon-imp
+          ports:
+            - containerPort: 8080
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              memory: 20Mi
+              cpu: 20m
+            limits:
+              memory: 64Mi
+              cpu: 100m
+
+# kubectl get ds -n project-1 -o wide
+# kubectl get po -n project-1 -o wide # check the nodes where Pods are running

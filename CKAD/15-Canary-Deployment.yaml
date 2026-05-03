@@ -1,64 +1,141 @@
-# main app (v1) gets 80% and canary app (v2) gets 20% of traffic based on their Replica numbers
+# Canary deployment sends traffic to both stable and canary versions through one Service
+# With 4 stable replicas and 1 canary replica, traffic is roughly 80% stable and 20% canary
 
-# in canary deployment, the One Service connects to Both of the app versions
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: my-service
+  labels:
+    app: myapp
 spec:
-  selector:
-    type: front-end
   type: ClusterIP
+  # Select both stable and canary Pods
+  selector:
+    app: myapp  #######
+    tier: frontend #######
   ports:
-    - port: 80
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
 
 ---
-# myapp-primary
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: myapp-primary #####
+  name: myapp-primary
   labels:
-    app: myapp
-    type: front-end
+    app: myapp  
+    tier: frontend 
+    track: stable 
 spec:
-  replicas: 4 #####
+  replicas: 4 #
   selector:
     matchLabels:
-      type: front-end
+      app: myapp
+      tier: frontend
+      track: stable
   template:
     metadata:
-      name: myapp-pod
       labels:
-        version: v1 #####
-        type: front-end
+        app: myapp  #######
+        tier: frontend  #######
+        track: stable # different
+        version: v1 # different
     spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: app-container
-          image: myapp-image:1.0 #####
+          image: myapp-image:1.0  # V1
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            runAsUser: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
 
 ---
-# myapp-canary
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: myapp-canary #####
+  name: myapp-canary
   labels:
     app: myapp
-    type: front-end
+    tier: frontend
+    track: canary
 spec:
-  replicas: 1 #####
+  replicas: 1
   selector:
     matchLabels:
-      type: front-end
+      app: myapp
+      tier: frontend
+      track: canary
   template:
     metadata:
-      name: myapp-pod
       labels:
-        version: v2 #####
-        type: front-end
+        app: myapp  #######
+        tier: frontend  #######
+        track: canary # different
+        version: v2  # different
     spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: app-container
-          image: myapp-image:2.0 #####
+          image: myapp-image:2.0  # V2
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            runAsUser: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

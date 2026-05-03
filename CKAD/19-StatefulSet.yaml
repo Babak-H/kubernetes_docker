@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -6,27 +7,66 @@ metadata:
     app: mysql
 spec:
   replicas: 3
-  # this way pods are created and deleted in an order one by one (default value)
+  # OrderedReady creates, updates, and deletes Pods in ordinal order, This is the default
   podManagementPolicy: OrderedReady
-  # statefulsets need HeadLess service
-  # this will create hostname(pod name) and subdomain(service name) for all the pods
+  # StatefulSets usually use a headless Service for stable network identities
+  # this will create hostname (pod name) and subdomain (service name) for all the pods
   serviceName: mysql-h
   selector:
     matchLabels:
-      app: mysql # has to match .spec.template.metadata.labels[0]
+      app: mysql
   template:
     metadata:
       labels:
         app: mysql
     spec:
+      securityContext:
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: mysql
-          image: mysql
+          image: mysql:8.4
+          ports:
+            - name: mysql
+              containerPort: 3306
+              protocol: TCP
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: root-password
           volumeMounts:
-            - mountPath: /var/lib/mysql
-              name: data-volume
-  # instead of creating PVC for statefulsets, we create volume claim template, this way we will have separate PVC and PV created for each pod instance
+            - name: data-volume
+              mountPath: /var/lib/mysql
+          readinessProbe:
+            tcpSocket:
+              port: mysql
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: mysql
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+  # instead of creating PVC for statefulsets (and mentioning them in the volume section like in deployment or pod), we create volume claim template, this way we will have separate PVC and PV created for each pod instance
   # storage class should exist
+  # volumeClaimTemplates creates one PVC per Pod instance
   volumeClaimTemplates:
     - metadata:
         name: data-volume
@@ -36,31 +76,40 @@ spec:
         storageClassName: google-storage
         resources:
           requests:
-            storage: 500M
+            storage: 500Mi
 
 ---
 # headless service does NOT load balance between pods, it only creates ip address and DNS name for them: "podname.headless-servicename.namespace.svc.cluster.local"
-# headless service
-
+# Headless Service: no load-balanced cluster IP
+# It provides stable DNS names such as mysql-0.mysql-h.default.svc.cluster.local
 apiVersion: v1
 kind: Service
 metadata:
   name: mysql-h
+  labels:
+    app: mysql
 spec:
+  # this part is only for the headless service
+  clusterIP: None
   selector:
     app: mysql
   ports:
-    - port: 3306
-  # this part is only for headless service
-  clusterIP: None
+    - name: mysql
+      port: 3306
+      targetPort: mysql
+      protocol: TCP
 
+
+######################
+ # Kafka-statefulset
+######################
 ---
-# Kakfa StatefulSet
-
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: kafka
+  labels:
+    app: kafka
 spec:
   serviceName: kafka-service-h
   replicas: 3
@@ -72,31 +121,70 @@ spec:
       labels:
         app: kafka
     spec:
+      securityContext:
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: kafka
-          image: nginx:1.25.1
+          image: nginxinc/nginx-unprivileged:1.25-alpine
+          ports:
+            - name: kafka
+              containerPort: 9092
+              protocol: TCP
           volumeMounts:
             - name: data
               mountPath: /data
+          readinessProbe:
+            tcpSocket:
+              port: kafka
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: kafka
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            runAsUser: 101
+            runAsGroup: 101
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
   volumeClaimTemplates:
     - metadata:
         name: data
       spec:
-        accessModes: ["ReadWriteOnce"]
+        accessModes:
+          - ReadWriteOnce
         resources:
           requests:
             storage: 10Gi
 
-# pod: kafka-0, kafka-1, kafka-2
-# service address: kafka-0.kafka-service-h.default.svc.cluster.local
+# Pod names: kafka-0, kafka-1, kafka-2.
+# Service address example: kafka-0.kafka-service-h.default.svc.cluster.local
+
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: kafka-service-h
+  labels:
+    app: kafka
 spec:
   clusterIP: None
   selector:
     app: kafka
   ports:
-    - port: 9092
+    - name: kafka
+      port: 9092
+      targetPort: kafka
+      protocol: TCP

@@ -16,17 +16,36 @@ spec:
       labels:
         app: my-app
     spec:
-      # user/pass for private image repo
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      # Username/password or token credentials for the private image registry
       imagePullSecrets:
-        - name: my-registery-key
+        - name: my-registry-key
       containers:
         - name: my-app
-          # full address of the container
-          image: <REPOSITORYADDRESS>/<IMAGE-NAME>:<IMAGE_VERSION>
-          # even if we have the image locally, always pull from the remote image registery
+          # full address of the image: registry.example.com/team/my-app:1.0.0
+          image: <REGISTRY>/<IMAGE-NAME>:<IMAGE-VERSION>
+          # always pull from the remote registry, even if a matching image exists on the node
           imagePullPolicy: Always
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
 
 ---
 apiVersion: v1
@@ -38,28 +57,28 @@ spec:
   selector:
     app: my-app
   ports:
-    - port: 80
-      targetPort: 8080
+    - name: http
+      port: 80
+      targetPort: http
       protocol: TCP
 
 ---
-# docker-secret.yml
+# docker registry pull Secret
 
 apiVersion: v1
 kind: Secret
 metadata:
-  name: my-registery-key
+  name: my-registry-key
+type: kubernetes.io/dockerconfigjson
 data:
-  type: kubernetes.io/dockerconfigjson
   .dockerconfigjson: <BASE64-ENCODED-OF-.DOCKER/CONFIG.JSON-FILE>
 
-# we get image from aws ecr
-# aws ecr get-login
-# docker login -u AWS -p PASSWORDS123 <ADDRESS-OF-PRIVATE-REPO>
+# Example for AWS ECR:
+# aws ecr get-login-password --region <REGION> | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com
 
-# inside the ECR go to .docker folder and find the file config.json we have "credStore" value
-# encode the file, so we can use it in docker-secret file
+# Docker stores registry credentials in ~/.docker/config.json
+# Encode that file and use it as the .dockerconfigjson value above
 
-# cat .docker/config.json | base64
-# k apply -f docker-secret.yml
-# k get secret
+# cat ~/.docker/config.json | base64 -w 0
+# kubectl apply -f docker-secret.yml
+# kubectl get secret my-registry-key

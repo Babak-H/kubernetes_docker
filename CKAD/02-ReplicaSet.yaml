@@ -1,23 +1,40 @@
+---
 apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
   name: myapp-replicaset
   labels:
     app: myapp
-    type: frontend
+    tier: frontend
 spec:
   replicas: 3
+  # The selector must match the labels on spec.template.metadata.labels.
   selector:
     matchLabels:
-      type: frontend
+      app: myapp
+      tier: frontend
   template:
     metadata:
-      name: myapp-pod
       labels:
         app: myapp
-        type: frontent
+        tier: frontend
     spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: nginx-container
-          image: nginx
-  
+          image: nginx:1.25.5
+          ports:
+            - containerPort: 80
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

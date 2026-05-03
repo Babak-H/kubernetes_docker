@@ -1,6 +1,14 @@
 # You are deploying a validating webhook that blocks Deployments unless they have "metadata.labels.environment" set to one of: "dev", "qa", "prod"
 
-# Create a Secret for TLS Certificate, In production use cert-manager, Vault, or own CA
+# Namespace for the webhook resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webhook-system
+
+---
+# Create a Secret for the TLS certificate. In production, use cert-manager, Vault, or your own CA
+
 apiVersion: v1
 kind: Secret
 metadata:
@@ -14,14 +22,15 @@ data:
   tls.key: <BASE64-ENCODED-KEY>
 
 ---
-# Deployment for the Webhook Server, Webhook listens on port 8443 and serves /validate
+# Deployment for the webhook server. The webhook listens on port 8443 and serves /validate
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: environment-validator
   namespace: webhook-system
-labels:
-  app: environment-validator
+  labels:
+    app: environment-validator
 spec:
   replicas: 2
   selector:
@@ -32,19 +41,58 @@ spec:
       labels:
         app: environment-validator
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1234
+        fsGroup: 1234
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: environment-validator
       containers:
         - name: webhook
           image: myregistry.io/webhooks/environment-validator:1.0.0
+          args:
+            # our arguments refer to the tls certificate and private key mounted via volume
+            - "--tls-cert-file=/tls/tls.crt"
+            - "--tls-private-key-file=/tls/tls.key"
           ports:
-            - containerPort: 8443
+            - name: https
+              containerPort: 8443
+          readinessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /readyz
+              port: https
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /healthz
+              port: https
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           # mount the tls certificate inside this container
           volumeMounts:
             - name: tls-certs
               mountPath: /tls
               readOnly: true
-              args:
-                - "--tls-cert-file=/tls/tls.crt"
-                - "--tls-private-key-file=/tls/tls.key"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
       volumes:
         - name: tls-certs
           secret:
@@ -52,6 +100,7 @@ spec:
 
 ---
 # Service for the Webhook, This is important because the API server talks to the webhook using a service DNS name
+
 apiVersion: v1
 kind: Service
 metadata:
@@ -64,39 +113,6 @@ spec:
   selector:
     app: environment-validator
 
-# since webhook reads resources to validate them, it needs a role-binding to access these resources
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: environment-validator
-  namespace: webhook-system
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  namespace: webhook-system
-  name: environment-validator-role
-rules:
-  - apiGroup: ["apps"]
-    resources: ["deployment"]
-    verbs: ["get", "list", "watch"]
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: environment-validator-binding
-  namespace: webhook-system
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: environment-validator-role
-subjects:
-  - kind: ServiceAccount
-    name: environment-validator
-    namespace: webhook-system
 
 ---
 # ValidatingWebhook config
@@ -108,7 +124,7 @@ metadata:
   name: deployment-environment-validator
 webhooks:
   - name: environment.validator.example.com
-    # apply this rule for apps/v1 (api version for deployments), when they are created or updated.
+    # apply this rule for apps/v1 (api version for deployments), when they are created or updated
     rules:
       - apiGroups: ["apps"]
         apiVersions: ["v1"]
@@ -128,6 +144,7 @@ webhooks:
     failurePolicy: Fail
     timeoutSeconds: 5
 
+    
     
 # goLang logic inside the environment-validator deployment:
 

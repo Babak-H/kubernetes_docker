@@ -1,96 +1,113 @@
-# ClusterIP service
+# Services route traffic to Pods selected by labels
+
 ---
+# ClusterIP Service: reachable only inside the cluster
 apiVersion: v1
 kind: Service
 metadata:
-  # name of this service
   name: back-end
-spec:
-  # type of service is clusterIP which is only available inside the cluster (usually matched with ingress for exposing it to outside world)
-  type: ClusterIP
-  # chooses the pods that we attach this service too via labels
-  selector:
-    # the pod should have these two labels
+  labels:
     app: myapp
-    type: backend
+    tier: backend
+spec:
+  type: ClusterIP
+  # Selects Pods that have both labels
+  selector:
+    app: myapp
+    tier: backend
   ports:
-    - targetPort: 80 # port on the pod
-      port: 80 # port of this service (other resources connect to this)
+    - name: http
+      port: 80 # Service port used by other cluster resources to connect to the pod
+      targetPort: 80 # Container port on the selected Pods
+      protocol: TCP
 
-
-# NodePort service (we expose the pod/deployment to outside world directly via a port on Node(host machine) )
 ---
+# NodePort Service: exposes the Service on every node at a static high port
 apiVersion: v1
 kind: Service
 metadata:
   name: myapp-service
+  labels:
+    app: myapp
+    tier: frontend
 spec:
   type: NodePort
   selector:
     app: myapp
-    type: frontend
+    tier: frontend
   ports:
-    - port: 80  # port on service (when we do not mention targetPort, it means that it is the same as the port on service)
-      targetPort: 80  # port on pod
-      # must have a value between 30000 and 32767
-      nodePort: 30008  # port on Node (underlying machine that pods run on it)
+    - name: http
+      # The Service port inside the cluster. Other Pods/resources can call => myapp-service:80  , Pod -> Service:80 -> Pod:8080
+      port: 80 # Service port
+      targetPort: 8080 # Container port on the selected Pods
+      # The port opened on every Kubernetes Node. External clients can call => <NodeIP>:30008 , External client -> NodeIP:30008 -> Service:80 -> Pod:8080
+      nodePort: 30008 # Node port; valid range is usually 30000-32767.
+      protocol: TCP
 
-
-# basic LoadBalancer Service
 ---
+# Basic LoadBalancer Service: asks the platform for an external load balancer (like AWS, Azure,...)
 apiVersion: v1
 kind: Service
 metadata:
   name: hello-kube-loadbalancer-service
+  labels:
+    component: web
 spec:
   type: LoadBalancer
   selector:
     component: web
   ports:
-    - port: 80
+    - name: http
+      port: 80
       targetPort: 80
+      protocol: TCP
 
 ---
-# LoadBalancer Service for AWS
-
+# AWS LoadBalancer Service example.
 apiVersion: v1
 kind: Service
 metadata:
   name: nginx
+  labels:
+    app: nginx
   annotations:
-    # aws specific: upgrade classic LB to NLB
-    service.kubernetes.io/aws-load-balancer-type: "nlb"
-    # aws specific: provision private loadbalancer
-    service.kubernetes.io/aws-load-balancer-internal: "true"
+    # AWS-specific: request a Network Load Balancer.
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    # AWS-specific: create an internal/private load balancer.
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
 spec:
   type: LoadBalancer
-  ports:
-    - name: web
-      port: 80
   selector:
     app: nginx
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
 
 ---
-# kubernetes Service with Multiple Ports
-
+# NodePort Service with multiple ports.
 apiVersion: v1
 kind: Service
 metadata:
   name: my-service-multiple
+  labels:
+    app: my-app
 spec:
+  type: NodePort
   selector:
     app: my-app
-  # this is the clusterIP of this Service, it can be accessed via this elasticIP
+  # Optional fixed cluster IP. Omit this in most real manifests and let Kubernetes assign one.
   clusterIP: 10.97.153.249
   externalTrafficPolicy: Cluster
   ports:
-    - name: port-1
-      nodePort: 32714
+    - name: http
       port: 8080
       targetPort: 8080
+      nodePort: 32714
       protocol: TCP
-    - name: port-2
-      nodePort: 32715
+    - name: metrics
       port: 17176
-      protocol: TCP
       targetPort: 17176
+      nodePort: 32715
+      protocol: TCP

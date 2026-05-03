@@ -4,64 +4,93 @@ kind: Deployment
 metadata:
   name: api-deployment
   namespace: development
+  labels:
+    app: notes
+    component: api
 spec:
-  minReadySeconds: 2 # default is zero, it will give it at ATLEAST 2 seconds to be ready for this deployment
+  # Minimum time a new Pod must be ready before it is considered available, default is Zero
+  minReadySeconds: 2
   replicas: 3
   selector:
-    # this should be the same as the labels we have for pod/template
+    # This selector must match spec.template.metadata.labels.
     matchLabels:
+      app: notes
       component: api
-  # this section is same in both Pod and Deployment
   template:
     metadata:
       labels:
+        app: notes
         component: api
     spec:
+      securityContext:
+        # fsGroup => Sets a filesystem group ID for mounted volumes, so the container can read/write files in those volumes.
+        # Kubernetes may change mounted volume ownership/permissions so files are accessible by group 2000.
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: api
-          image: fhsinchy/notes-api
+          image: fhsinchy/notes-api:1.0.0
           ports:
-            - containerPort: 3000  # this is target port on the service resource
+            - containerPort: 3000 # "Target port" used by the Service.
           env:
             - name: DB_CONNECTION
               value: pg
             - name: DB_HOST
               value: postgres-clusterip-service
             - name: DB_PORT
-              value: '5432'
+              value: "5432"
             - name: DB_USER
               value: postgres
             - name: DB_DATABASE
               value: notesdb
             - name: DB_PASSWORD
-              value: 63eaQB9wtLqmNBpg
-          # deployment with securityContext
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            # Enabling debug logs is done by appending —-verbosity=debug to the command of the main container in the deployment k8s yaml.
+            # debug setting. Prefer app-specific environment variables over overriding command.
+            - name: VERBOSITY
+              value: debug
           securityContext:
             runAsUser: 1000
+            # runAsGroup => Sets the primary Linux group ID that the container process runs as, GID 3000
             runAsGroup: 3000
-            fsGroup: 2000
-          # Enabling debug logs is done by appending —-verbosity=debug to the command of the main container in the deployment k8s yaml:
-          command:
-          - --verbosity=debug
-
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
 
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: api-loadbalancer-service
+  namespace: development
+  labels:
+    app: notes
+    component: api
 spec:
   type: LoadBalancer
   selector:
-    # this should match the "spec.template.metadata.labels" in deployment
+    # This must match the Deployment Pod template labels. "spec.template.metadata.labels"
+    app: notes
     component: api
   ports:
-    - port: 3000 # service
-      targetPort: 3000 # pod
+    - name: http
+      port: 3000 # Service port.
+      targetPort: 3000 # Container port.
 
 ---
-# multi-container / sidecar deployment
-
+# Multi-container with sidecar pod Deployment.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -78,44 +107,91 @@ spec:
       labels:
         app: nginx-webapp
     spec:
+      securityContext:
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
+
         - name: sidecar-container-1
-          image: busybox
+          image: busybox:1.36.1
           command: ["/bin/sh"]
           args: ["-c", "while true; do echo $(date -u) 'Hi I am from Sidecar container 1' >> /var/log/index.html; sleep 5; done"]
           volumeMounts:
             - mountPath: /var/log
               name: var-logs
-        # sidecar 2, also sends data to volume
-        - name: sidecar-container2
-          image: busybox
+          securityContext:
+            runAsUser: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+
+        # Sidecar 2 also writes data to the shared volume.
+        - name: sidecar-container-2
+          image: busybox:1.36.1
           command: ["/bin/sh"]
           args: ["-c", "while true; do echo $(date -u) 'Hi I am from Sidecar container 2' >> /var/log/index.html; sleep 5; done"]
-          # one volume mounted to all containers
           volumeMounts:
             - name: var-logs
               mountPath: /var/log
-        # main container of the deployment, shows the data downloaded from sidecars
+          securityContext:
+            runAsUser: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+
+        # Main container serves the content written by the sidecars.
         - name: main-container
-          image: nginx
+          image: nginx:1.25.5
           ports:
             - containerPort: 80
-          # one volume mounted to all containers
           volumeMounts:
             - name: var-logs
               mountPath: /usr/share/nginx/html
+          # the official nginx image commonly starts as root so it can do a few setup tasks, especially:
+          # bind to privileged port 80, create/write runtime files such as PID files and cache/temp directories, switch worker processes internally to the nginx user depending on image config
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+
       volumes:
         - name: var-logs
           emptyDir: {}
 
 ---
-# Deployment with Several Volumes
-
-kind: Deployment
+# Deployment with PVC, Secret, and ConfigMap volumes.
 apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: elastic  # as it is visible here, the metadata for deployment can be Different from labels for the pod
+  name: elastic
+  labels:
+    app: elastic
 spec:
+  replicas: 1
   selector:
     matchLabels:
       app: elastic
@@ -124,9 +200,13 @@ spec:
       labels:
         app: elastic
     spec:
+      securityContext:
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: elastic-container
-          image: elastic:latest
+          image: elasticsearch:8.13.4
           ports:
             - containerPort: 9200
           volumeMounts:
@@ -134,29 +214,48 @@ spec:
               name: es-persistent-storage
             - mountPath: /var/lib/secret
               name: es-secret-dir
+              # set the volumes from secret and configmap to read-only so no process can edit them (as we reference thes values somewhere)
+              readOnly: true
             - mountPath: /var/lib/config
               name: es-config-dir
+              readOnly: true
+          securityContext:
+            runAsUser: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+
       volumes:
         - name: es-persistent-storage
           persistentVolumeClaim:
             claimName: es-pv-claim
-        # this is not a normal volume, but comes from secret
+        # Volume populated from a Secret.
         - name: es-secret-dir
           secret:
             secretName: es-secret
-        # this is not a normal volume, but comes from configMap
+        # Volume populated from a ConfigMap.
         - name: es-config-dir
           configMap:
             name: es-config-map
 
 ---
-# kubectl create deploy redis --image=redis:alpine --replicas=1 --dry-run=client - o yaml > redis.yaml
-# vi redis.yaml
+# kubectl create deployment redis --image=redis:7.2.5-alpine --replicas=1 --dry-run=client -o yaml > redis.yaml
+# vi reis.yaml
 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: redis
+  labels:
+    app: redis
 spec:
   replicas: 1
   selector:
@@ -167,19 +266,35 @@ spec:
       labels:
         app: redis
     spec:
+      securityContext:
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: redis
-          image: redis:alpine
+          image: redis:7.2.5-alpine
           ports:
             - containerPort: 6379
           resources:
             requests:
-              cpu: "0.2"
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           volumeMounts:
             - name: data
               mountPath: /redis-master-data
             - name: redis-config
               mountPath: /redis-master
+              readOnly: true
       volumes:
         - name: data
           emptyDir: {}

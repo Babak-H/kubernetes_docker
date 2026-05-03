@@ -1,22 +1,25 @@
 # k get networkpolicy
-# if we create a networkPolicy and add policy types but no specific policy, it will deny everything
-
+# If a policy selects Pods and has a policy type with no rules for that type, traffic for that type is denied
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: db-policy
 spec:
-  # only apply this policy to pods that have this label in them, use labels to select a group of pods for which the rules will be applied to.
+
+  # only apply this policy to pods that have this label on them, use labels to select a group of pods for which the rules will be applied to
   podSelector:
     matchLabels:
       role: db
+
   # apply ingress (incoming) and egress (outgoing) policies, can be Ingress and Egress or both. this will determine if the rules will be applied to Incoming
-  # and/or Outgoing traffic. if not defined, then Ingress will be enabled and Egress only when there are rules defined.
+  # and/or Outgoing traffic. if not defined, then Ingress will be enabled and Egress only when there are rules defined
   policyTypes:
     - Ingress
     - Egress
+
   # these sections allow a list of from (Ingress) or to (Egress) and port blocks. each from/to block contains a range of IPs (ipBlock) and/or a list of namespaces selected by label (namespaceSelector), and/or a
-  # list of pods by label (podSelector) that select which IPs, namespaces or pods our target can talk to. the ports block define which ports are affected by this rule.
+  # list of pods by label (podSelector) that select which IPs, namespaces or pods our target can talk to. the ports block define which ports are affected by this rule
 
   # Traffic that comes to this pod (role: db)
   ingress:
@@ -25,11 +28,11 @@ spec:
         - podSelector:
             matchLabels:
               name: api-pod
-            # allow traffic from this namespace to access this pod (role: db)
+        # allow traffic from this namespace to access this pod (role: db)
         - namespaceSelector:
             matchLabels:
               name: prod
-          # allow traffic to this pod, from this ip range
+        # allow traffic to this pod, from this ip range
         - ipBlock:
             cidr: 192.168.5.10/32
       # all these traffic (from above sources) can only come in through this port range
@@ -38,11 +41,11 @@ spec:
           port: 3306
   # traffic going outside this pod
   egress:
+    # allow traffic to go out to this ip range
     - to:
-        # allow traffic to go out to this ip range
         - ipBlock:
             cidr: 192.168.5.10/32
-      # allow traffic to only go out via port 80
+      # allow traffic to only go out via the port 80
       ports:
         - protocol: TCP
           port: 80
@@ -59,11 +62,10 @@ spec:
   policyTypes:
     - Egress
     - Ingress
-  # we have no ingress policy at the moment, so keep it empty dict
-  ingress:
-    - {} # no resource can send traffic to this netpol's target pod (name: internal)
+  # # no resource can send traffic to this netpol's target pod (name: internal)
+  ingress: []
   egress:
-    # Traffic to mysql pod is ONLY allowed on port 3306
+    # Traffic to mysql Pods is allowed only on TCP port 3306
     - to:
         - podSelector:
             matchLabels:
@@ -71,7 +73,7 @@ spec:
       ports:
         - protocol: TCP
           port: 3306
-    # traffic to payroll pod is ONLY allowed in port 8080
+    # Traffic to payroll Pod is allowed only on TCP port 8080
     - to:
         - podSelector:
             matchLabels:
@@ -79,7 +81,7 @@ spec:
       ports:
         - protocol: TCP
           port: 8080
-    # these ports are allowed on all outgoing pods
+    # Allow DNS to any destination (these ports are allowed on all outgoing pods)
     - ports:
         - port: 53
           protocol: UDP
@@ -93,6 +95,7 @@ spec:
 # k get pod => make sure pod is running
 # k get svc => make sure service works, its clusterip on port 80
 # k get netpol => check if there are any networkpolicies
+
 # k describe netpol default-deny => we can see allowing ingress traffic is set to <none>
 # we can create a new network policy that allows incoming traffic (netpols work in addition to each other)
 # k get pod --show-label => check what label is secure-pod using, we need it when creating network policy
@@ -116,11 +119,11 @@ spec:
         - protocol: TCP
           port: 80
 
-# k exec -it webapp-color -- sh   # exec into pod webapp-color
-# nc -v -z -w 2 secure-server 80 # try connecting from inside this pod to secure-pod's service
+# kubectl exec -it webapp-color -- sh
+# nc -v -z -w 2 secure-service 80  # try connecting from inside this pod to secure-pod's service
 
 ---
-# NetworkPolicy for Redis deployment
+# NetworkPolicy for Redis Pods
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -154,17 +157,17 @@ spec:
     - Egress
   egress:
     - to:
-        # this means pods should be in level-1000 namespace AND labeled level:100x
+        # Pods must be in namespace level-1000 AND have label level=100x , and olny traffic to port 80 is allowed
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: level-1000
           podSelector:
             matchLabels:
               level: 100x
-      # this port rule ONLY applies to pods in this specific rule
       ports:
         - port: 80
           protocol: TCP
+    # pods must be in namespace level-1001 and have label level=100x and only traffic to port 80 is allowed.
     - to:
         - namespaceSelector:
             matchLabels:
@@ -175,37 +178,12 @@ spec:
       ports:
         - port: 80
           protocol: TCP
-    # these port are seperate section than each "- to" section, meaning all port 53 traffic to EVERYWHERE is allowed
+    # This separate rule allows DNS traffic to any destination
     - ports:
         - port: 53
           protocol: TCP
         - port: 53
-          protocol: UPD
-
----
-# you have a cluster with pods in many namespaces. "db" pods in "project-a" namespace should only be accesible from "service" pods that are running in "project-b" namespace => create networkPolicy
-# k get po -n project-a --show-labels
-# k get po -n project-b --show-labels
-
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-service-to-db
-  namespace: project-a
-spec:
-  podSelector:
-    matchLabels:
-      app: db # db pods have a label "app=db"
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              name: project-b # Allow access from project-b namespace
-          podSelector:
-            matchLabels:
-              app: service # Allow access from pods with label app=service in project-b namespace
+          protocol: UDP
 
 ---
 # This NetworkPolicy is a default deny-ingress policy
@@ -217,12 +195,15 @@ metadata:
   name: default-deny
   namespace: test-3
 spec:
+  # Select all Pods in this namespace
   podSelector: {}
   policyTypes:
-    - Ingress # if we do not mention any specific ingress policy , all is denied!
+    - Ingress
+  # if we do not mention any specific ingress policy , all is denied!
+  ingress: []
 
 ---
-# you have a cluster with pods in many namespaces. "db" pods in "project-a" namespace should only be acceesible from "service" pods that are running in "project-b" namespace => create networkPolicy
+# you have a cluster with pods in many namespaces. "db" pods in "project-a" ns should only be acceesible from "service" pods that are running in "project-b" ns => create networkPolicy
 
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -232,17 +213,18 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: db # applied only to pods that have app=db labels
+      app: db
   policyTypes:
     - Ingress
   ingress:
     - from:
+        # namespaceSelector and podSelector in the same item are an AND condition
         - namespaceSelector:
             matchLabels:
-              ns: project-b # Allow access from project-b namespace
-          podSelector: # if we had - podSelector instead, it would become a OR condition
+              kubernetes.io/metadata.name: project-b
+          podSelector:
             matchLabels:
-              app: service # Allow access from pods with label app=service in project-b namespace
+              app: service
 
-# test it, ping ip address of a project-a db pod from a project-b service pod
-# k -n project-b exec service-*** -- ping 192.168.1.3
+# Test from a project-b service Pod:
+# k -n project-b exec service-xxx -- ping 192.168.1.3
