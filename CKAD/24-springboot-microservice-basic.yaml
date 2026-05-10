@@ -1,4 +1,8 @@
+# This is a Kubernetes cluster without using Helm, and all the resources are defined in this single YAML file.
+# this is only for education purpose, not for production use. In production, we use Helm chart  so that we can use template for several environments and files instead of repeating ourselves.
+
 # transporter-frontend
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,14 +18,27 @@ spec:
       labels:
         app: transporter
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       imagePullSecrets:
         - name: my-reg-key
       containers:
       - name: transporter
         image: registry.code.***.com/rim/frontend/transporter-frontend:latest
         ports:
-        - containerPort: 8080
+        - name: http
+          containerPort: 8080
+          protocol: TCP
         imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
         resources:
           requests:
             cpu: 50m
@@ -29,6 +46,7 @@ spec:
           limits:
             cpu: 200m
             memory: 200Mi
+
 
 ---
 
@@ -44,10 +62,11 @@ spec:
   ports:
   - protocol: TCP
     port: 8080
-    targetPort: 8080 
+    targetPort: http
 
 ---
 # transporter-authentication
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -70,14 +89,25 @@ spec:
       securityContext:
         runAsUser: 1000
         runAsGroup: 3000
+        runAsNonRoot: true
+        fsGroup: 3000
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
       imagePullSecrets:
         - name: my-reg-key
       containers:
       - name: transporter-authentication
         image: registry.code.****.com/rim/java/transporter-authentication:1.0.0-SNAPSHOT
         ports:
-        - containerPort: 8082
+        - name: http
+          containerPort: 8082
+          protocol: TCP
         imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "dev"
@@ -111,10 +141,11 @@ spec:
   ports:
   - protocol: TCP
     port: 8082
-    targetPort: 8082
+    targetPort: http
 
 ---
 # transporter-config-server
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -133,14 +164,24 @@ spec:
       securityContext:
         runAsUser: 1000
         runAsGroup: 3000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
       imagePullSecrets:
         - name: my-reg-key
       containers:
       - name: transporter-config-server
         image: registry.code.****.com/rim/java/transporter-config-server:1.0.0-SNAPSHOT
         ports:
-        - containerPort: 8888
+        - name: http
+          containerPort: 8888
+          protocol: TCP
         imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "dev"
@@ -156,7 +197,7 @@ spec:
               name: my-ssh-key
               key: id_rsa
         - name: SPRING_CLOUD_CONFIG_SERVER_GIT_STRICTHOSTKEYCHECKING
-          value: "false"
+          value: "true"
         - name: SPRING_CLOUD_CONFIG_SERVER_GIT_IGNORE_LOCAL_SSH_SETTINGS
           value: "true"
         resources:
@@ -180,9 +221,11 @@ spec:
   ports:
   - protocol: TCP
     port: 8888
+    targetPort: http
 
 ---
 # transporter-discovery-server
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -201,14 +244,24 @@ spec:
       securityContext:
         runAsUser: 1000
         runAsGroup: 3000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
       imagePullSecrets:
         - name: my-reg-key
       containers:
       - name: transporter-discovery-server
         image: registry.code.****.com/rim/java/transporter-discovery-server:1.0.2
         ports:
-        - containerPort: 8761
+        - name: http
+          containerPort: 8761
+          protocol: TCP
         imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
         env:
           - name: SPRING_PROFILES_ACTIVE
             value: "dev"
@@ -237,10 +290,11 @@ spec:
   ports:
   - protocol: TCP
     port: 8761
-    targetPort: 8761
+    targetPort: http
 
 ---
 # transporter-download
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -260,19 +314,32 @@ spec:
         - name: download-vol
           persistentVolumeClaim:
             claimName: download-claim
+        # Mount external file shares through a Kubernetes PV/CSI driver instead of running mount with inline credentials in the app container
+        - name: dnafiles-vol
+          persistentVolumeClaim:
+            claimName: dnafiles-claim
       securityContext:
         runAsUser: 1000
         runAsGroup: 3000
+        runAsNonRoot: true
+        fsGroup: 3000
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
       imagePullSecrets:
         - name: my-reg-key
       containers:
       - name: transporter-download
         image: registry.code.****.com/rim/java/transporter-download:1.0.0-SNAPSHOT
-        command: ["/bin/sh"]
-        args: ["-c", "mount -t cifs //dnafiles.***.com/RegalkProduction /home/spring/dnafiles --verbose -o user=****\\rvdrim34,pass=******;"]
         ports:
-        - containerPort: 8083
+        - name: http
+          containerPort: 8083
+          protocol: TCP
         imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "dev"
@@ -292,6 +359,8 @@ spec:
         volumeMounts:
           - name: download-vol
             mountPath: /home/spring/vol/
+          - name: dnafiles-vol
+            mountPath: /home/spring/dnafiles
 
 ---
 
@@ -307,10 +376,11 @@ spec:
   ports:
   - protocol: TCP
     port: 8083
-    targetPort: 8083
+    targetPort: http
 
 ---
 # transporter-gateway
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -333,14 +403,25 @@ spec:
       securityContext:
         runAsUser: 1000
         runAsGroup: 3000
+        runAsNonRoot: true
+        fsGroup: 3000
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
       imagePullSecrets:
         - name: my-reg-key
       containers:
       - name: transporter-gateway
         image: registry.code.****.com/rim/java/transporter-gateway:1.0.0-SNAPSHOT
         ports:
-        - containerPort: 8081
+        - name: http
+          containerPort: 8081
+          protocol: TCP
         imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "dev"
@@ -375,11 +456,12 @@ spec:
   ports:
   - protocol: TCP
     port: 8081
-    targetPort: 8081
+    targetPort: http
 
 
 ---
 # volume-claims
+
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -440,6 +522,20 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: download-claim
+  namespace: rim
+spec:
+  storageClassName: pxcz-ls-xs-sb
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 0.2Gi
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dnafiles-claim
   namespace: rim
 spec:
   storageClassName: pxcz-ls-xs-sb

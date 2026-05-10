@@ -1,0 +1,6 @@
+apiVersion: v2
+name: springboot-microservice
+description: Helm chart for the MDDZ Spring Boot microservice cluster
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

@@ -1,0 +1,108 @@
+{{- range $name, $workload := .Values.workloads }}
+{{- if ne $workload.enabled false }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ default $name $workload.name }}
+  namespace: {{ include "springboot-microservice.namespace" $ }}
+  labels:
+    app: {{ default $name $workload.app }}
+    app.kubernetes.io/name: {{ default $name $workload.name }}
+    app.kubernetes.io/component: {{ default "backend" $workload.component }}
+{{ include "springboot-microservice.labels" $ | indent 4 }}
+spec:
+  replicas: {{ default 1 $workload.replicas }}
+  selector:
+    matchLabels:
+      app: {{ default $name $workload.app }}
+  template:
+    metadata:
+      labels:
+        app: {{ default $name $workload.app }}
+        app.kubernetes.io/name: {{ default $name $workload.name }}
+        app.kubernetes.io/component: {{ default "backend" $workload.component }}
+{{- with $workload.partOf }}
+        app.kubernetes.io/part-of: {{ . }}
+{{- end }}
+{{- with $workload.podAnnotations }}
+      annotations:
+{{ toYaml . | indent 8 }}
+{{- end }}
+    spec:
+      automountServiceAccountToken: {{ default .Values.automountServiceAccountToken $workload.automountServiceAccountToken }}
+{{- with $workload.serviceAccountName }}
+      serviceAccountName: {{ . }}
+{{- end }}
+{{- if hasKey $workload "imagePullSecrets" }}
+{{- with $workload.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml . | indent 8 }}
+{{- end }}
+{{- else }}
+# $.Values => $. refers to the root of the values.yaml, so $.Values.imagePullSecrets is the global imagePullSecrets defined in values.yaml
+{{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml . | indent 8 }}
+{{- end }}
+{{- end }}
+{{- with $workload.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ . }}
+{{- end }}
+{{- with $workload.podSecurityContext }}
+      securityContext:
+{{ toYaml . | indent 8 }}
+{{- end }}
+{{- with $workload.initContainers }}
+      initContainers:
+{{ toYaml . | indent 8 }}
+{{- end }}
+{{- with $workload.volumes }}
+      volumes:
+{{ toYaml . | indent 8 }}
+{{- end }}
+      containers:
+        - name: {{ default (default $name $workload.name) $workload.containerName }}
+          image: "{{ required (printf "image.repository is required for workload %s" $name) $workload.image.repository }}:{{ required (printf "image.tag is required for workload %s" $name) $workload.image.tag }}"
+          imagePullPolicy: {{ default "IfNotPresent" $workload.imagePullPolicy }}
+{{- with $workload.command }}
+          command:
+{{ toYaml . | indent 12 }}
+{{- end }}
+{{- with $workload.args }}
+          args:
+{{ toYaml . | indent 12 }}
+{{- end }}
+{{- with $workload.lifecycle }}
+          lifecycle:
+{{ toYaml . | indent 12 }}
+{{- end }}
+{{- with $workload.securityContext }}
+          securityContext:
+{{ toYaml . | indent 12 }}
+{{- end }}
+{{- with $workload.ports }}
+          ports:
+{{ toYaml . | indent 12 }}
+{{- end }}
+{{- with $workload.envFrom }}
+          envFrom:
+{{ toYaml . | indent 12 }}
+{{- end }}
+{{- with $workload.env }}
+          env:
+{{ toYaml . | indent 12 }}
+{{- end }}
+{{- with $workload.resources }}
+          resources:
+{{ toYaml . | indent 12 }}
+{{- end }}
+{{- with $workload.probes }}
+{{ toYaml . | indent 10 }}
+{{- end }}
+{{- with $workload.volumeMounts }}
+          volumeMounts:
+{{ toYaml . | indent 12 }}
+{{- end }}
+{{- end }}
+{{- end }}

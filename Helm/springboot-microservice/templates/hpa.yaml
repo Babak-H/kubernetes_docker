@@ -1,0 +1,25 @@
+{{- if .Values.autoscaling.enabled }}
+{{- range $key, $hpa := .Values.autoscaling.items }}
+{{- if ne $hpa.enabled false }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ default $key $hpa.name }}
+  namespace: {{ include "springboot-microservice.namespace" $ }}
+  labels:
+{{ include "springboot-microservice.labels" $ | indent 4 }}
+spec:
+  scaleTargetRef:
+{{ toYaml $hpa.scaleTargetRef | indent 4 }}
+  minReplicas: {{ $hpa.minReplicas }}
+  maxReplicas: {{ $hpa.maxReplicas }}
+{{- with $hpa.behavior }}
+  behavior:
+{{ toYaml . | indent 4 }}
+{{- end }}
+  metrics:
+{{ toYaml $hpa.metrics | indent 4 }}
+{{- end }}
+{{- end }}
+{{- end }}

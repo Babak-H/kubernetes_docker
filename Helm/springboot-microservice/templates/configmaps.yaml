@@ -1,0 +1,21 @@
+{{- if .Values.configMaps.create }}
+{{- range $name, $configMap := .Values.configMaps.items }}
+{{- if ne $configMap.enabled false }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "springboot-microservice.namespace" $ }}
+  labels:
+{{ include "springboot-microservice.labels" $ | indent 4 }}
+{{- with $configMap.data }}
+data:
+{{- range $key, $value := . }}
+  {{ $key }}: |-
+{{ $value | toString | nindent 4 }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

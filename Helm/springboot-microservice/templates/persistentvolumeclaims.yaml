@@ -1,0 +1,23 @@
+{{- if .Values.persistence.enabled }}
+{{- range $name, $claim := .Values.persistence.claims }}
+{{- if ne $claim.enabled false }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "springboot-microservice.namespace" $ }}
+  labels:
+{{ include "springboot-microservice.labels" $ | indent 4 }}
+spec:
+{{- with $claim.storageClassName }}
+  storageClassName: {{ . }}
+{{- end }}
+  accessModes:
+{{ toYaml $claim.accessModes | indent 4 }}
+  resources:
+    requests:
+      storage: {{ $claim.size }}
+{{- end }}
+{{- end }}
+{{- end }}

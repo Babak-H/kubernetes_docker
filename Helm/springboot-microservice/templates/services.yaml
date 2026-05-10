@@ -1,0 +1,36 @@
+{{- range $name, $service := .Values.services }}
+{{- if ne $service.enabled false }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "springboot-microservice.namespace" $ }}
+  labels:
+    app: {{ $service.app }}
+    app.kubernetes.io/name: {{ $service.app }}
+{{ include "springboot-microservice.labels" $ | indent 4 }}
+{{- with $service.annotations }}
+  annotations:
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+  # we have defined default values for these fields, since most of the services will have same values
+  type: {{ default $.Values.serviceDefaults.type $service.type }}
+  sessionAffinity: {{ default $.Values.serviceDefaults.sessionAffinity $service.sessionAffinity }}
+  ipFamilyPolicy: {{ default $.Values.serviceDefaults.ipFamilyPolicy $service.ipFamilyPolicy }}
+  ipFamilies:
+{{ toYaml (default $.Values.serviceDefaults.ipFamilies $service.ipFamilies) | indent 4 }}
+  selector:
+    app: {{ $service.app }}
+  ports:
+{{- if $service.ports }}
+{{ toYaml $service.ports | indent 4 }}
+{{- else }}
+    - name: {{ default "http" $service.portName }}
+      protocol: {{ default "TCP" $service.protocol }}
+      port: {{ $service.port }}
+      targetPort: {{ default $service.port $service.targetPort }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,1371 @@
+namespace:
+  name: mddz
+  create: false
+  labels:
+    name: mddz
+
+imagePullSecrets:
+  - name: my-reg-key
+
+automountServiceAccountToken: false
+
+serviceAccounts:
+  create: true
+  automountServiceAccountToken: false
+  names:
+    - service-registry-sa
+    - config-server-sa
+    - cloud-admin-sa
+    - configuration-fetcher-sa
+    - notification-fetcher-sa
+    - file-handler-sa
+    - email-sender-sa
+    - report-uploader-sa
+    - box-connector-sa
+    - filebeat-sa
+    - logstash-sa
+
+secrets:
+  create: false
+  items:
+    eureka-pass-secret:
+      type: Opaque
+      stringData:
+        eureka-pass: ""
+    encrypt-key-secret:
+      type: Opaque
+      stringData:
+        ENCRYPT_KEY: ""
+        encrypt-key: ""
+    my-ssh-key:
+      type: Opaque
+      stringData:
+        id_rsa: ""
+
+configMaps:
+  create: true
+  items:
+    hosts:
+      data:
+        known-hosts: ""
+    service-registry-config:
+      data:
+        SPRING_PROFILES_ACTIVE: "remote,dev"
+        mddz_EUREKA_PEER1_HOST: "service-registry-service-1"
+        mddz_EUREKA_PEER2_HOST: "service-registry-service-2"
+        mddz_EUREKA_PEER3_HOST: "service-registry-service-3"
+        JAVA_TOOL_OPTIONS: "-Xms256m -Xmx410m"
+    config-server-config:
+      data:
+        SPRING_PROFILES_ACTIVE: "remote,dev"
+        mddz_EUREKA_PEER1_HOST: "service-registry-service-1"
+        mddz_EUREKA_PEER2_HOST: "service-registry-service-2"
+        mddz_EUREKA_PEER3_HOST: "service-registry-service-3"
+        EUREKA_INSTANCE_HOSTNAME: "config-server-service"
+        mddz_EUREKA_PORT: "8761"
+        JAVA_TOOL_OPTIONS: "-Xms256m -Xmx410m"
+        SPRING_CLOUD_CONFIG_SERVER_GIT_STRICTHOSTKEYCHECKING: "false"
+        SPRING_CLOUD_CONFIG_SERVER_GIT_IGNORE_LOCAL_SSH_SETTINGS: "true"
+    cloud-admin-config:
+      data:
+        SPRING_PROFILES_ACTIVE: "remote,dev"
+        mddz_EUREKA_PEER1_HOST: "service-registry-service-1"
+        mddz_EUREKA_PEER2_HOST: "service-registry-service-2"
+        mddz_EUREKA_PEER3_HOST: "service-registry-service-3"
+        mddz_EUREKA_PORT: "8761"
+        JAVA_TOOL_OPTIONS: "-Xms256m -Xmx410m"
+    configuration-fetcher-config:
+      data:
+        SPRING_PROFILES_ACTIVE: "remote,dev"
+        mddz_EUREKA_PEER1_HOST: "service-registry-service-1"
+        mddz_EUREKA_PEER2_HOST: "service-registry-service-2"
+        mddz_EUREKA_PEER3_HOST: "service-registry-service-3"
+        mddz_EUREKA_PORT: "8761"
+        JAVA_TOOL_OPTIONS: "-Xms256m -Xmx410m"
+    notification-fetcher-config:
+      data:
+        SPRING_PROFILES_ACTIVE: "remote,dev"
+        mddz_EUREKA_PEER1_HOST: "service-registry-service-1"
+        mddz_EUREKA_PEER2_HOST: "service-registry-service-2"
+        mddz_EUREKA_PEER3_HOST: "service-registry-service-3"
+        mddz_EUREKA_PORT: "8761"
+        JAVA_TOOL_OPTIONS: "-Xms256m -Xmx410m"
+    file-handler-config:
+      data:
+        SPRING_PROFILES_ACTIVE: "remote,dev"
+        mddz_EUREKA_PEER1_HOST: "service-registry-service-1"
+        mddz_EUREKA_PEER2_HOST: "service-registry-service-2"
+        mddz_EUREKA_PEER3_HOST: "service-registry-service-3"
+        mddz_EUREKA_PORT: "8761"
+        JAVA_TOOL_OPTIONS: "-Xms256m -Xmx410m"
+    email-sender-config:
+      data:
+        SPRING_PROFILES_ACTIVE: "remote,dev"
+        mddz_EUREKA_PEER1_HOST: "service-registry-service-1"
+        mddz_EUREKA_PEER2_HOST: "service-registry-service-2"
+        mddz_EUREKA_PEER3_HOST: "service-registry-service-3"
+        mddz_EUREKA_PORT: "8761"
+        JAVA_TOOL_OPTIONS: "-Xms256m -Xmx410m"
+    report-uploader-config:
+      data:
+        SPRING_PROFILES_ACTIVE: "remote,dev"
+        mddz_EUREKA_PEER1_HOST: "service-registry-service-1"
+        mddz_EUREKA_PEER2_HOST: "service-registry-service-2"
+        mddz_EUREKA_PEER3_HOST: "service-registry-service-3"
+        mddz_EUREKA_PORT: "8761"
+        JAVA_TOOL_OPTIONS: "-Xms256m -Xmx410m"
+    box-connector-config:
+      data:
+        SPRING_PROFILES_ACTIVE: "remote,dev"
+        mddz_EUREKA_PEER1_HOST: "service-registry-service-1"
+        mddz_EUREKA_PEER2_HOST: "service-registry-service-2"
+        mddz_EUREKA_PEER3_HOST: "service-registry-service-3"
+        mddz_EUREKA_PORT: "8761"
+        JAVA_TOOL_OPTIONS: "-Xms256m -Xmx410m"
+    filebeat-yml:
+      data:
+        filebeat.yml: |-
+          http.enabled: true
+          http.host: 0.0.0.0
+          http.port: 8888
+          filebeat.inputs:
+            - type: filestream
+              id: service-registry-peer1
+              paths: ["/usr/share/filebeat/logs/service-registry/peer1/*.log"]
+            - type: filestream
+              id: service-registry-peer2
+              paths: ["/usr/share/filebeat/logs/service-registry/peer2/*.log"]
+            - type: filestream
+              id: service-registry-peer3
+              paths: ["/usr/share/filebeat/logs/service-registry/peer3/*.log"]
+            - type: filestream
+              id: config-server
+              paths: ["/usr/share/filebeat/logs/config-server/*.log"]
+            - type: filestream
+              id: cloud-admin
+              paths: ["/usr/share/filebeat/logs/cloud-admin/*.log"]
+            - type: filestream
+              id: email-sender
+              paths: ["/usr/share/filebeat/logs/email-sender/*.log"]
+            - type: filestream
+              id: report-uploader
+              paths: ["/usr/share/filebeat/logs/report-uploader/*.log"]
+            - type: filestream
+              id: configuration-fetcher
+              paths: ["/usr/share/filebeat/logs/configuration-fetcher/*.log"]
+            - type: filestream
+              id: file-handler
+              paths: ["/usr/share/filebeat/logs/file-handler/*.log"]
+            - type: filestream
+              id: box-connector
+              paths: ["/usr/share/filebeat/logs/box-connector/*.log"]
+            - type: filestream
+              id: notification-fetcher
+              paths: ["/usr/share/filebeat/logs/notification-fetcher/*.log"]
+          output.logstash:
+            hosts: ["logstash-service:5044"]
+    logstash-config:
+      data:
+        ENVIRONMENT: "dev"
+        LS_JAVA_OPTS: "-Xms512m -Xmx512m"
+    logstash-conf:
+      data:
+        logstash.conf: |-
+          input {
+            beats {
+              port => 5044
+            }
+          }
+
+          filter {
+            mutate {
+              add_field => { "environment" => "${ENVIRONMENT:dev}" }
+            }
+          }
+
+          output {
+            stdout {
+              codec => rubydebug
+            }
+          }
+    logstash-yml:
+      data:
+        logstash.yml: |-
+          http.host: "0.0.0.0"
+          http.port: 9600
+          path.data: /usr/share/logstash/data
+
+persistence:
+  enabled: true
+  claims:
+    peer1-logs-claim: &logClaim
+      enabled: true
+      storageClassName: pxb-Rs-xf-oc
+      accessModes:
+        - ReadWriteMany
+      size: 0.2Gi
+    peer2-logs-claim:
+      <<: *logClaim
+    peer3-logs-claim:
+      <<: *logClaim
+    cloud-admin-logs-claim:
+      <<: *logClaim
+    config-server-logs-claim:
+      <<: *logClaim
+    email-sender-logs-claim:
+      <<: *logClaim
+    report-uploader-logs-claim:
+      <<: *logClaim
+    configuration-fetcher-logs-claim:
+      <<: *logClaim
+    file-handler-logs-claim:
+      <<: *logClaim
+    box-connector-logs-claim:
+      <<: *logClaim
+    notification-fetcher-logs-claim:
+      <<: *logClaim
+
+workloads:
+  service-registry-1:
+    enabled: true
+    replicas: 1
+    component: backend
+    serviceAccountName: service-registry-sa
+    terminationGracePeriodSeconds: 30
+    podAnnotations: &istioSidecarResources
+      sidecar.istio.io/proxyCPU: 80m
+      sidecar.istio.io/proxyCPULimit: 100m
+      sidecar.istio.io/proxyMemory: 150Mi
+      sidecar.istio.io/proxyMemoryLimit: 300Mi
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8761"
+    podSecurityContext: &defaultPodSecurityContext
+      fsGroup: 10001
+      seccompProfile:
+        type: RuntimeDefault
+    volumes:
+      - name: peer1-logs
+        persistentVolumeClaim:
+          claimName: peer1-logs-claim
+      - name: tmp
+        emptyDir: {}
+    image:
+      repository: "registry.code.***.com/mddz/service-registry"
+      tag: "1.0.0"
+    imagePullPolicy: Always
+    securityContext: &readonlySpringSecurityContext
+      runAsUser: 10000
+      runAsGroup: 10001
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+    ports:
+      - name: http
+        containerPort: 8761
+        protocol: TCP
+    env:
+      - name: INSTANCE
+        value: peer1
+      - name: INSTANCE_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+      - name: ENCRYPT_KEY
+        valueFrom:
+          secretKeyRef:
+            name: encrypt-key-secret
+            key: encrypt-key
+    envFrom:
+      - configMapRef:
+          name: service-registry-config
+    resources: &smallSpringResources
+      requests:
+        cpu: 50m
+        memory: 150Mi
+      limits:
+        cpu: 300m
+        memory: 512Mi
+    probes: &serviceRegistryProbes
+      livenessProbe:
+        httpGet:
+          path: /actuator/health/liveness
+          port: http
+        initialDelaySeconds: 20
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /actuator/health/readiness
+          port: http
+        initialDelaySeconds: 10
+        periodSeconds: 5
+      startupProbe:
+        httpGet:
+          path: /actuator/health
+          port: http
+        failureThreshold: 30
+        periodSeconds: 5
+    volumeMounts:
+      - name: peer1-logs
+        mountPath: /home/mddz/logs/service-registry
+        subPathExpr: $(INSTANCE_NAME)
+      - name: tmp
+        mountPath: /tmp
+
+  service-registry-2:
+    enabled: true
+    replicas: 1
+    component: backend
+    serviceAccountName: service-registry-sa
+    terminationGracePeriodSeconds: 30
+    podAnnotations:
+      <<: *istioSidecarResources
+    podSecurityContext:
+      <<: *defaultPodSecurityContext
+    volumes:
+      - name: peer2-logs
+        persistentVolumeClaim:
+          claimName: peer2-logs-claim
+      - name: tmp
+        emptyDir: {}
+    image:
+      repository: "registry.code.***.com/mddz/service-registry"
+      tag: "1.0.0"
+    imagePullPolicy: Always
+    securityContext:
+      <<: *readonlySpringSecurityContext
+    ports:
+      - name: http
+        containerPort: 8761
+        protocol: TCP
+    env:
+      - name: INSTANCE
+        value: peer2
+      - name: INSTANCE_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+      - name: ENCRYPT_KEY
+        valueFrom:
+          secretKeyRef:
+            name: encrypt-key-secret
+            key: encrypt-key
+    envFrom:
+      - configMapRef:
+          name: service-registry-config
+    resources:
+      <<: *smallSpringResources
+    probes:
+      <<: *serviceRegistryProbes
+    volumeMounts:
+      - name: peer2-logs
+        mountPath: /home/mddz/logs/service-registry
+        subPathExpr: $(INSTANCE_NAME)
+      - name: tmp
+        mountPath: /tmp
+
+  service-registry-3:
+    enabled: true
+    replicas: 1
+    component: backend
+    serviceAccountName: service-registry-sa
+    terminationGracePeriodSeconds: 30
+    podAnnotations:
+      <<: *istioSidecarResources
+    podSecurityContext:
+      <<: *defaultPodSecurityContext
+    volumes:
+      - name: peer3-logs
+        persistentVolumeClaim:
+          claimName: peer3-logs-claim
+      - name: tmp
+        emptyDir: {}
+    image:
+      repository: "registry.code.***.com/mddz/service-registry"
+      tag: "1.0.0"
+    imagePullPolicy: Always
+    securityContext:
+      <<: *readonlySpringSecurityContext
+    ports:
+      - name: http
+        containerPort: 8761
+        protocol: TCP
+    env:
+      - name: INSTANCE
+        value: peer3
+      - name: INSTANCE_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+      - name: ENCRYPT_KEY
+        valueFrom:
+          secretKeyRef:
+            name: encrypt-key-secret
+            key: encrypt-key
+    envFrom:
+      - configMapRef:
+          name: service-registry-config
+    resources:
+      <<: *smallSpringResources
+    probes:
+      <<: *serviceRegistryProbes
+    volumeMounts:
+      - name: peer3-logs
+        mountPath: /home/mddz/logs/service-registry
+        subPathExpr: $(INSTANCE_NAME)
+      - name: tmp
+        mountPath: /tmp
+
+  config-server:
+    enabled: true
+    replicas: 1
+    component: backend
+    serviceAccountName: config-server-sa
+    terminationGracePeriodSeconds: 30
+    podAnnotations:
+      sidecar.istio.io/inject: "false"
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8888"
+    podSecurityContext:
+      <<: *defaultPodSecurityContext
+    volumes:
+      - name: config-server-logs
+        persistentVolumeClaim:
+          claimName: config-server-logs-claim
+      - name: known-hosts
+        configMap:
+          name: hosts
+      - name: tmp
+        emptyDir: {}
+    image:
+      repository: "registry.***.****.com/mddz/config-server"
+      tag: "1.0.0"
+    imagePullPolicy: Always
+    securityContext: &writableSpringSecurityContext
+      runAsUser: 10000
+      runAsGroup: 10001
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+    ports:
+      - name: http
+        containerPort: 8888
+        protocol: TCP
+    envFrom:
+      - configMapRef:
+          name: config-server-config
+    env:
+      - name: SPRING_CLOUD_CONFIG_SERVER_GIT_PRIVATE_KEY
+        valueFrom:
+          secretKeyRef:
+            name: my-ssh-key
+            key: id_rsa
+      - name: ENCRYPT_KEY
+        valueFrom:
+          secretKeyRef:
+            name: encrypt-key-secret
+            key: ENCRYPT_KEY
+      - name: INSTANCE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+    resources:
+      requests:
+        cpu: 100m
+        memory: 150Mi
+      limits:
+        cpu: 300m
+        memory: 512Mi
+    probes: &configServerProbes
+      livenessProbe:
+        httpGet:
+          path: /actuator/health/liveness
+          port: http
+        initialDelaySeconds: 20
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /actuator/health/readiness
+          port: http
+        initialDelaySeconds: 10
+        periodSeconds: 5
+      startupProbe:
+        httpGet:
+          path: /actuator/health
+          port: http
+        failureThreshold: 30
+        periodSeconds: 5
+    volumeMounts:
+      - name: config-server-logs
+        mountPath: /home/mddz/logs/config-server
+        subPathExpr: $(INSTANCE)
+      - name: known-hosts
+        mountPath: /home/mddz/.ssh/known_hosts
+        subPath: known-hosts
+      - name: tmp
+        mountPath: /tmp
+
+  cloud-admin:
+    enabled: true
+    replicas: 1
+    component: backend
+    serviceAccountName: cloud-admin-sa
+    terminationGracePeriodSeconds: 30
+    podAnnotations:
+      sidecar.istio.io/inject: "false"
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9999"
+    podSecurityContext:
+      <<: *defaultPodSecurityContext
+    volumes:
+      - name: cloud-admin-logs
+        persistentVolumeClaim:
+          claimName: cloud-admin-logs-claim
+      - name: tmp
+        emptyDir: {}
+    image:
+      repository: "registry.***.******.com/mddz/cloud-admin"
+      tag: "1.0.0"
+    imagePullPolicy: Always
+    securityContext:
+      <<: *readonlySpringSecurityContext
+    ports:
+      - name: http
+        containerPort: 9999
+        protocol: TCP
+    envFrom:
+      - configMapRef:
+          name: cloud-admin-config
+    env:
+      - name: mddz_EUREKA_USER_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: eureka-pass-secret
+            key: eureka-pass
+      - name: ENCRYPT_KEY
+        valueFrom:
+          secretKeyRef:
+            name: encrypt-key-secret
+            key: ENCRYPT_KEY
+      - name: INSTANCE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+    resources:
+      requests:
+        cpu: 80m
+        memory: 150Mi
+      limits:
+        cpu: 300m
+        memory: 512Mi
+    probes:
+      livenessProbe:
+        httpGet:
+          path: /actuator/health/liveness
+          port: http
+        initialDelaySeconds: 20
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /actuator/health/readiness
+          port: http
+        initialDelaySeconds: 10
+        periodSeconds: 5
+      startupProbe:
+        httpGet:
+          path: /actuator/health
+          port: http
+        failureThreshold: 30
+        periodSeconds: 5
+    volumeMounts:
+      - name: cloud-admin-logs
+        mountPath: /home/mddz/logs/cloud-admin
+        subPathExpr: $(INSTANCE)
+      - name: tmp
+        mountPath: /tmp
+
+  configuration-fetcher:
+    enabled: true
+    replicas: 1
+    component: backend
+    serviceAccountName: configuration-fetcher-sa
+    terminationGracePeriodSeconds: 30
+    podAnnotations:
+      sidecar.istio.io/inject: "false"
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8081"
+    podSecurityContext:
+      <<: *defaultPodSecurityContext
+    volumes:
+      - name: configuration-fetcher-logs
+        persistentVolumeClaim:
+          claimName: configuration-fetcher-logs-claim
+      - name: tmp
+        emptyDir: {}
+    image:
+      repository: "registry.***.****.com/mddz/configuration-fetcher"
+      tag: "1.0.0"
+    imagePullPolicy: Always
+    securityContext:
+      <<: *readonlySpringSecurityContext
+    ports:
+      - name: http
+        containerPort: 8081
+        protocol: TCP
+    envFrom:
+      - configMapRef:
+          name: configuration-fetcher-config
+    env: &standardMsdDrPasswordEnv
+      - name: MSDDR_EUREKA_USER_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: eureka-pass-secret
+            key: eureka-pass
+      - name: INSTANCE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+    resources:
+      <<: *smallSpringResources
+    probes: &port8081Probes
+      livenessProbe:
+        httpGet:
+          path: /actuator/health/liveness
+          port: http
+        initialDelaySeconds: 20
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /actuator/health/readiness
+          port: http
+        initialDelaySeconds: 10
+        periodSeconds: 5
+      startupProbe:
+        httpGet:
+          path: /actuator/health
+          port: http
+        failureThreshold: 30
+        periodSeconds: 5
+    volumeMounts:
+      - name: configuration-fetcher-logs
+        mountPath: /home/mddz/logs/configuration-fetcher
+        subPathExpr: $(INSTANCE)
+      - name: tmp
+        mountPath: /tmp
+
+  notification-fetcher:
+    enabled: true
+    replicas: 1
+    component: backend
+    serviceAccountName: notification-fetcher-sa
+    terminationGracePeriodSeconds: 30
+    podAnnotations:
+      <<: *istioSidecarResources
+      prometheus.io/port: "8082"
+    podSecurityContext:
+      <<: *defaultPodSecurityContext
+    volumes:
+      - name: notification-fetcher-logs
+        persistentVolumeClaim:
+          claimName: notification-fetcher-logs-claim
+      - name: tmp
+        emptyDir: {}
+    image:
+      repository: "registry.code.***.com/mddz/notification-fetcher"
+      tag: "1.0.0"
+    imagePullPolicy: Always
+    securityContext:
+      <<: *readonlySpringSecurityContext
+    ports:
+      - name: http
+        containerPort: 8082
+        protocol: TCP
+    envFrom:
+      - configMapRef:
+          name: notification-fetcher-config
+    env:
+      - name: mddz_EUREKA_USER_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: eureka-pass-secret
+            key: eureka-pass
+      - name: INSTANCE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+    resources:
+      <<: *smallSpringResources
+    probes:
+      <<: *port8081Probes
+    volumeMounts:
+      - name: notification-fetcher-logs
+        mountPath: /home/mddz/logs/notification-fetcher
+        subPathExpr: $(INSTANCE)
+      - name: tmp
+        mountPath: /tmp
+
+  file-handler:
+    enabled: true
+    replicas: 1
+    component: backend
+    serviceAccountName: file-handler-sa
+    terminationGracePeriodSeconds: 30
+    podAnnotations:
+      <<: *istioSidecarResources
+      prometheus.io/port: "8083"
+    podSecurityContext:
+      <<: *defaultPodSecurityContext
+    volumes:
+      - name: file-handler-logs
+        persistentVolumeClaim:
+          claimName: file-handler-logs-claim
+      - name: tmp
+        emptyDir: {}
+    image:
+      repository: "registry.***.****.com/mddz/file-handler"
+      tag: "1.0.0"
+    imagePullPolicy: Always
+    securityContext:
+      <<: *readonlySpringSecurityContext
+    ports:
+      - name: http
+        containerPort: 8083
+        protocol: TCP
+    envFrom:
+      - configMapRef:
+          name: file-handler-config
+    env:
+      - name: MSDDR_EUREKA_USER_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: eureka-pass-secret
+            key: eureka-pass
+      - name: INSTANCE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+    resources:
+      <<: *smallSpringResources
+    probes:
+      <<: *port8081Probes
+    volumeMounts:
+      - name: file-handler-logs
+        mountPath: /home/mddz/logs/file-handler
+        subPathExpr: $(INSTANCE)
+      - name: tmp
+        mountPath: /tmp
+
+  email-sender:
+    enabled: true
+    replicas: 1
+    component: backend
+    serviceAccountName: email-sender-sa
+    terminationGracePeriodSeconds: 30
+    podAnnotations:
+      <<: *istioSidecarResources
+      prometheus.io/port: "8084"
+    podSecurityContext:
+      <<: *defaultPodSecurityContext
+    volumes:
+      - name: email-sender-logs
+        persistentVolumeClaim:
+          claimName: email-sender-logs-claim
+      - name: tmp
+        emptyDir: {}
+    image:
+      repository: "registry.****.****.com/mddz/email-sender"
+      tag: "1.0.0"
+    imagePullPolicy: Always
+    securityContext:
+      <<: *readonlySpringSecurityContext
+    ports:
+      - name: http
+        containerPort: 8084
+        protocol: TCP
+    envFrom:
+      - configMapRef:
+          name: email-sender-config
+    env:
+      - name: MSDDR_EUREKA_USER_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: eureka-pass-secret
+            key: eureka-pass
+      - name: INSTANCE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+    resources:
+      <<: *smallSpringResources
+    probes:
+      <<: *port8081Probes
+    volumeMounts:
+      - name: email-sender-logs
+        mountPath: /home/mddz/logs/email-sender
+        subPathExpr: $(INSTANCE)
+      - name: tmp
+        mountPath: /tmp
+
+  report-uploader:
+    enabled: true
+    replicas: 1
+    component: backend
+    serviceAccountName: report-uploader-sa
+    terminationGracePeriodSeconds: 30
+    podAnnotations:
+      <<: *istioSidecarResources
+      prometheus.io/port: "8085"
+    podSecurityContext:
+      <<: *defaultPodSecurityContext
+    volumes:
+      - name: report-uploader-logs
+        persistentVolumeClaim:
+          claimName: report-uploader-logs-claim
+      - name: tmp
+        emptyDir: {}
+    image:
+      repository: "registry.code.***.com/mddz/report-uploader"
+      tag: "1.0.0"
+    imagePullPolicy: Always
+    securityContext:
+      <<: *readonlySpringSecurityContext
+    ports:
+      - name: http
+        containerPort: 8085
+        protocol: TCP
+    envFrom:
+      - configMapRef:
+          name: report-uploader-config
+    env:
+      - name: MSDDR_EUREKA_USER_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: eureka-pass-secret
+            key: eureka-pass
+      - name: INSTANCE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+    resources:
+      <<: *smallSpringResources
+    probes:
+      <<: *port8081Probes
+    volumeMounts:
+      - name: report-uploader-logs
+        mountPath: /home/mddz/logs/report-uploader
+        subPathExpr: $(INSTANCE)
+      - name: tmp
+        mountPath: /tmp
+
+  box-connector:
+    enabled: true
+    replicas: 1
+    component: backend
+    serviceAccountName: box-connector-sa
+    terminationGracePeriodSeconds: 30
+    podAnnotations:
+      <<: *istioSidecarResources
+      prometheus.io/port: "8091"
+    podSecurityContext:
+      <<: *defaultPodSecurityContext
+    initContainers:
+      - name: startup-wait
+        image: busybox:1.36.1
+        command:
+          - /bin/sh
+          - -c
+          - echo 'Setting the container to sleep for 5 minutes'; sleep 300
+        securityContext:
+          runAsUser: 10000
+          runAsGroup: 10001
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+    volumes:
+      - name: box-connector-logs
+        persistentVolumeClaim:
+          claimName: box-connector-logs-claim
+      - name: tmp
+        emptyDir: {}
+    image:
+      repository: "registry.****.***.com/mddz/box-connector"
+      tag: "1.0.0"
+    imagePullPolicy: Always
+    securityContext:
+      <<: *readonlySpringSecurityContext
+    ports:
+      - name: http
+        containerPort: 8091
+        protocol: TCP
+    envFrom:
+      - configMapRef:
+          name: box-connector-config
+    env:
+      - name: mddz_EUREKA_USER_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: eureka-pass-secret
+            key: eureka-pass
+      - name: INSTANCE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+    resources:
+      requests:
+        cpu: 80m
+        memory: 150Mi
+      limits:
+        cpu: 300m
+        memory: 512Mi
+    probes:
+      <<: *port8081Probes
+    volumeMounts:
+      - name: box-connector-logs
+        mountPath: /home/mddz/logs/box-connector
+        subPathExpr: $(INSTANCE)
+      - name: tmp
+        mountPath: /tmp
+
+  filebeat:
+    enabled: true
+    replicas: 1
+    component: logging
+    partOf: observability
+    serviceAccountName: filebeat-sa
+    imagePullSecrets: []
+    terminationGracePeriodSeconds: 90
+    podAnnotations:
+      sidecar.istio.io/inject: "false"
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8888"
+    podSecurityContext:
+      <<: *defaultPodSecurityContext
+    volumes:
+      - name: filebeat-yml
+        configMap:
+          name: filebeat-yml
+      - name: peer1-logs
+        persistentVolumeClaim:
+          claimName: peer1-logs-claim
+      - name: peer2-logs
+        persistentVolumeClaim:
+          claimName: peer2-logs-claim
+      - name: peer3-logs
+        persistentVolumeClaim:
+          claimName: peer3-logs-claim
+      - name: config-server-logs
+        persistentVolumeClaim:
+          claimName: config-server-logs-claim
+      - name: cloud-admin-logs
+        persistentVolumeClaim:
+          claimName: cloud-admin-logs-claim
+      - name: email-sender-logs
+        persistentVolumeClaim:
+          claimName: email-sender-logs-claim
+      - name: report-uploader-logs
+        persistentVolumeClaim:
+          claimName: report-uploader-logs-claim
+      - name: configuration-fetcher-logs
+        persistentVolumeClaim:
+          claimName: configuration-fetcher-logs-claim
+      - name: file-handler-logs
+        persistentVolumeClaim:
+          claimName: file-handler-logs-claim
+      - name: box-connector-logs
+        persistentVolumeClaim:
+          claimName: box-connector-logs-claim
+      - name: notification-fetcher-logs
+        persistentVolumeClaim:
+          claimName: notification-fetcher-logs-claim
+      - name: filebeat-data
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+    image:
+      repository: docker.elastic.co/beats/filebeat-oss
+      tag: "8.4.3"
+    imagePullPolicy: IfNotPresent
+    args:
+      - -e
+      - --strict.perms=false
+    securityContext:
+      <<: *readonlySpringSecurityContext
+    ports:
+      - name: http
+        containerPort: 8888
+        protocol: TCP
+    resources:
+      requests:
+        cpu: 150m
+        memory: 200Mi
+      limits:
+        cpu: 300m
+        memory: 400Mi
+    probes:
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: http
+        initialDelaySeconds: 10
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: http
+        initialDelaySeconds: 5
+        periodSeconds: 10
+    volumeMounts:
+      - name: filebeat-yml
+        mountPath: /usr/share/filebeat/filebeat.yml
+        subPath: filebeat.yml
+      - name: peer1-logs
+        mountPath: /usr/share/filebeat/logs/service-registry/peer1
+        readOnly: true
+      - name: peer2-logs
+        mountPath: /usr/share/filebeat/logs/service-registry/peer2
+        readOnly: true
+      - name: peer3-logs
+        mountPath: /usr/share/filebeat/logs/service-registry/peer3
+        readOnly: true
+      - name: config-server-logs
+        mountPath: /usr/share/filebeat/logs/config-server
+        readOnly: true
+      - name: cloud-admin-logs
+        mountPath: /usr/share/filebeat/logs/cloud-admin
+        readOnly: true
+      - name: email-sender-logs
+        mountPath: /usr/share/filebeat/logs/email-sender
+        readOnly: true
+      - name: report-uploader-logs
+        mountPath: /usr/share/filebeat/logs/report-uploader
+        readOnly: true
+      - name: configuration-fetcher-logs
+        mountPath: /usr/share/filebeat/logs/configuration-fetcher
+        readOnly: true
+      - name: file-handler-logs
+        mountPath: /usr/share/filebeat/logs/file-handler
+        readOnly: true
+      - name: box-connector-logs
+        mountPath: /usr/share/filebeat/logs/box-connector
+        readOnly: true
+      - name: notification-fetcher-logs
+        mountPath: /usr/share/filebeat/logs/notification-fetcher
+        readOnly: true
+      - name: filebeat-data
+        mountPath: /usr/share/filebeat/data
+      - name: tmp
+        mountPath: /tmp
+
+  logstash:
+    enabled: true
+    replicas: 1
+    component: logging
+    partOf: observability
+    serviceAccountName: logstash-sa
+    imagePullSecrets: []
+    terminationGracePeriodSeconds: 90
+    podAnnotations:
+      sidecar.istio.io/inject: "false"
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9600"
+    podSecurityContext:
+      <<: *defaultPodSecurityContext
+    volumes:
+      - name: logstash-conf
+        configMap:
+          name: logstash-conf
+      - name: logstash-yml
+        configMap:
+          name: logstash-yml
+      - name: logstash-data
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+    image:
+      repository: docker.elastic.co/logstash/logstash
+      tag: "8.5.1"
+    imagePullPolicy: IfNotPresent
+    lifecycle:
+      preStop:
+        exec:
+          command:
+            - sh
+            - -c
+            - sleep 20
+    securityContext:
+      <<: *readonlySpringSecurityContext
+    ports:
+      - name: beats
+        containerPort: 5044
+        protocol: TCP
+      - name: metrics
+        containerPort: 9600
+        protocol: TCP
+    envFrom:
+      - configMapRef:
+          name: logstash-config
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        cpu: 500m
+        memory: 2Gi
+    probes:
+      livenessProbe:
+        httpGet:
+          path: /
+          port: metrics
+        initialDelaySeconds: 30
+        periodSeconds: 15
+      readinessProbe:
+        httpGet:
+          path: /
+          port: metrics
+        initialDelaySeconds: 10
+        periodSeconds: 10
+    volumeMounts:
+      - name: logstash-conf
+        mountPath: /usr/share/logstash/pipeline/logstash.conf
+        subPath: logstash.conf
+      - name: logstash-yml
+        mountPath: /usr/share/logstash/config/logstash.yml
+        subPath: logstash.yml
+      - name: logstash-data
+        mountPath: /usr/share/logstash/data
+      - name: tmp
+        mountPath: /tmp
+
+  my-delayed-app:
+    enabled: false
+    replicas: 1
+    component: example
+    imagePullSecrets: []
+    initContainers:
+      - name: startup-wait
+        image: busybox:1.36.1
+        command:
+          - /bin/sh
+          - -c
+          - echo 'Setting the container to sleep for 5 minutes'; sleep 300
+    image:
+      repository: registry.k8s.io/goproxy
+      tag: "0.1"
+    imagePullPolicy: IfNotPresent
+    ports:
+      - name: http
+        containerPort: 8080
+        protocol: TCP
+    resources:
+      limits:
+        memory: 128Mi
+        cpu: 500m
+
+services:
+  service-registry-service-1:
+    enabled: true
+    app: service-registry-1
+    port: 8761
+    targetPort: http
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8761"
+  service-registry-service-2:
+    enabled: true
+    app: service-registry-2
+    port: 8761
+    targetPort: http
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8761"
+  service-registry-service-3:
+    enabled: true
+    app: service-registry-3
+    port: 8761
+    targetPort: http
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8761"
+  config-server-service:
+    enabled: true
+    app: config-server
+    port: 8888
+    targetPort: http
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8888"
+  cloud-admin-service:
+    enabled: true
+    app: cloud-admin
+    port: 9999
+    targetPort: http
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9999"
+  configuration-fetcher-service:
+    enabled: true
+    app: configuration-fetcher
+    port: 8081
+    targetPort: http
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8081"
+  notification-fetcher-service:
+    enabled: true
+    app: notification-fetcher
+    port: 8082
+    targetPort: http
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8082"
+  file-handler-service:
+    enabled: true
+    app: file-handler
+    port: 8083
+    targetPort: http
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8083"
+  email-sender-service:
+    enabled: true
+    app: email-sender
+    port: 8084
+    targetPort: http
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8084"
+  report-uploader-service:
+    enabled: true
+    app: report-uploader
+    port: 8085
+    targetPort: http
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8085"
+  box-connector-service:
+    enabled: true
+    app: box-connector
+    port: 8091
+    targetPort: http
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8091"
+  filebeat-service:
+    enabled: true
+    app: filebeat
+    port: 8888
+    targetPort: http
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8888"
+  logstash-service:
+    enabled: true
+    app: logstash
+    ports:
+      - name: beats
+        port: 5044
+        targetPort: beats
+        protocol: TCP
+      - name: metrics
+        port: 9600
+        targetPort: metrics
+        protocol: TCP
+
+serviceDefaults:
+  type: ClusterIP
+  sessionAffinity: ClientIP
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+
+ingress:
+  enabled: true
+  name: ingress-controller
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+  tls:
+    - hosts:
+        - mddz.kubmun.***.***.com
+      secretName: tls-secret
+  hosts:
+    - host: mddz.kubmun.***.***.com
+      paths:
+        - path: /peer1
+          pathType: Prefix
+          serviceName: service-registry-service-1
+          servicePort: 8761
+        - path: /peer2
+          pathType: Prefix
+          serviceName: service-registry-service-2
+          servicePort: 8761
+        - path: /peer3
+          pathType: Prefix
+          serviceName: service-registry-service-3
+          servicePort: 8761
+        - path: /cloud-admin
+          pathType: Prefix
+          serviceName: cloud-admin-service
+          servicePort: 9999
+        - path: /configuration-fetcher
+          pathType: Prefix
+          serviceName: configuration-fetcher-service
+          servicePort: 8081
+        - path: /report-uploader
+          pathType: Prefix
+          serviceName: report-uploader-service
+          servicePort: 8085
+
+autoscaling:
+  enabled: true
+  items:
+    config-server:
+      enabled: true
+      name: config-server-hpa
+      minReplicas: 1
+      maxReplicas: 4
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: config-server
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 180
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 70
+
+networkPolicies:
+  enabled: true
+  items:
+    box-access:
+      enabled: true
+      spec:
+        podSelector:
+          matchLabels:
+            app: box-connector
+        policyTypes:
+          - Ingress
+        ingress:
+          - from:
+              - namespaceSelector:
+                  matchLabels:
+                    kubernetes.io/metadata.name: mddz
+                podSelector:
+                  matchLabels:
+                    app: file-handler
+            ports:
+              - protocol: TCP
+                port: 8091

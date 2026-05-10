@@ -1,0 +1,16 @@
+{{- if .Values.networkPolicies.enabled }}
+{{- range $name, $policy := .Values.networkPolicies.items }}
+{{- if ne $policy.enabled false }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "springboot-microservice.namespace" $ }}
+  labels:
+{{ include "springboot-microservice.labels" $ | indent 4 }}
+spec:
+{{ toYaml $policy.spec | indent 2 }}
+{{- end }}
+{{- end }}
+{{- end }}
