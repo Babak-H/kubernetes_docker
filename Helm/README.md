@@ -58,7 +58,7 @@ tag: {{ .tag }}
 
 Inside the block, `.` is `.Values.image`.
 
----
+
 
 **range** (loops)
 
@@ -112,7 +112,6 @@ Here you're asking:
 
 The context (`.`) stays the same inside the block.
 
----
 
 ### Use `with` when you want to test a value **and** make it the new context
 
@@ -138,7 +137,6 @@ image:
 
 Inside the block, `.` becomes `.Values.image`.
 
----
 
 ### Common Helm pattern
 
@@ -163,8 +161,6 @@ nodeSelector:
 {{- end }}
 ```
 
----
-
 ### Rule of thumb
 
 * **`if`** → "Should I render this block?"
@@ -180,3 +176,5 @@ For Kubernetes Helm charts, you'll very often see:
 ```
 
 because these are objects/lists that become easier to reference as `.` within the block.
+
+---
