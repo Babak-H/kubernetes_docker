@@ -178,3 +178,177 @@ For Kubernetes Helm charts, you'll very often see:
 because these are objects/lists that become easier to reference as `.` within the block.
 
 ---
+
+`.Chart` and `.Release` are built-in Helm objects that Helm automatically provides when rendering templates.
+
+## `.Chart`
+
+Contains information from your `Chart.yaml`.
+
+Example `Chart.yaml`:
+
+```yaml
+apiVersion: v2
+name: retail-ui
+version: 1.2.3
+appVersion: "2.1.0"
+description: Retail UI
+```
+
+You can access:
+
+```yaml
+{{ .Chart.Name }}
+```
+
+→ `retail-ui`
+
+```yaml
+{{ .Chart.Version }}
+```
+
+→ `1.2.3`
+
+```yaml
+{{ .Chart.AppVersion }}
+```
+
+→ `2.1.0`
+
+Example:
+
+```yaml
+labels:
+  helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+```
+
+renders:
+
+```yaml
+labels:
+  helm.sh/chart: retail-ui-1.2.3
+```
+
+
+## `.Release`
+
+Contains information about the Helm release.
+
+Suppose you run:
+
+```bash
+helm install my-shop ./chart
+```
+
+Then:
+
+```yaml
+{{ .Release.Name }}
+```
+
+→ `my-shop`
+
+```yaml
+{{ .Release.Namespace }}
+```
+
+→ namespace where it is installed
+
+```yaml
+{{ .Release.Service }}
+```
+
+→ usually `Helm`
+
+Example:
+
+```yaml
+metadata:
+  name: {{ .Release.Name }}
+```
+
+renders:
+
+```yaml
+metadata:
+  name: my-shop
+```
+
+
+## Why do charts use `.Release.Name`?
+
+To allow multiple installations of the same chart.
+
+For example:
+
+```bash
+helm install dev-retail ./chart
+helm install prod-retail ./chart
+```
+
+Then:
+
+| Release | `.Release.Name` |
+| ------- | --------------- |
+| Dev     | `dev-retail`    |
+| Prod    | `prod-retail`   |
+
+The chart can generate unique resource names:
+
+```yaml
+metadata:
+  name: {{ .Release.Name }}-ui
+```
+
+Result:
+
+```yaml
+dev-retail-ui
+prod-retail-ui
+```
+
+
+## Common objects you'll see
+
+```yaml
+.Values
+```
+
+Values from `values.yaml`
+
+```yaml
+.Chart
+```
+
+Metadata from `Chart.yaml`
+
+```yaml
+.Release
+```
+
+Information about the Helm installation/upgrade
+
+```yaml
+.Capabilities
+```
+
+Kubernetes version and supported APIs
+
+```yaml
+.Files
+```
+
+Access files packaged in the chart
+
+
+When you see something like:
+
+```yaml
+app.kubernetes.io/instance: {{ .Release.Name }}
+helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+```
+
+it's using:
+
+* `.Release.Name` → identifies **this installation** of the chart
+* `.Chart.Name` / `.Chart.Version` → identifies **the chart package itself**.
