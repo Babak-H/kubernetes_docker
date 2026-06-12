@@ -352,3 +352,10 @@ it's using:
 
 * `.Release.Name` → identifies **this installation** of the chart
 * `.Chart.Name` / `.Chart.Version` → identifies **the chart package itself**.
+
+---
+
+{{ ... }}   keep surrounding whitespace
+{{- ... }}  trim whitespace before the tag
+{{ ... -}}  trim whitespace after the tag
+{{- ... -}} trim both sides
